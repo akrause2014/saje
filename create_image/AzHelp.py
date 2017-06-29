@@ -6,6 +6,7 @@ from azure.common.credentials import ServicePrincipalCredentials
 from azure.mgmt.resource import ResourceManagementClient
 from azure.mgmt.resource.resources.models import DeploymentMode
 from azure.mgmt.storage import StorageManagementClient
+from azure.mgmt.storage.models import StorageAccountCreateParameters, Sku, Kind
 from azure.storage.blob import BlockBlobService, PublicAccess
 
 class Auth(object):
@@ -135,25 +136,26 @@ class Deployer(object):
         return deployment_async_operation.result()
     pass
 
-class StorageAccountFactory(object):
-    def __init__(self, deployer):
-        self.deployer = deployer
-        return
-    def __call__(self, name, location, accountType, accessTier):
+class BlobStorageAccountFactory(object):
+    def __init__(self, auth):
+        self.client = StorageManagementClient(auth.credentials,
+                                                      auth.subscription_id)
         
-        params = {
-            'location': location,
-            'name': name,
-            'accountType': accountType,
-            'accessTier': accessTier
-        }
-        print "Creating storage account " + name
-        self.deployer('storagetemplate.json', params)
+        return
+    def __call__(self, location, group_name, account_name, account_type, access_tier):
+        print "Creating storage account " + account_name
+        # sku, kind, location, tags=None, custom_domain=None, encryption=None, access_tier=None
+        params = StorageAccountCreateParameters(Sku(account_type),
+                                                 Kind.blob_storage,
+                                                 location,
+                                                 access_tier=access_tier)
+        
+        request = self.client.storage_accounts.create(group_name, account_name, params)
+        request.wait()
         print "Done"
         print "Retrieving access keys"
-        storage_client = StorageManagementClient(self.deployer.auth.credentials,
-                                                 self.deployer.auth.subscription_id)
-        key_list = storage_client.storage_accounts.list_keys(self.deployer.rg,
-                                                             name)
+        key_list = self.client.storage_accounts.list_keys(group_name,
+                                                          account_name)
         print "Done"
-        return StorageAccount(name, key_list.keys[0].value)
+        return StorageAccount(account_name, key_list.keys[0].value)
+    pass

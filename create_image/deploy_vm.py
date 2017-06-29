@@ -25,8 +25,9 @@ class ImageCreator(object):
 
     def __call__(self):
         self.storage_account_name = self.name_generator.haikunate(delimiter='')
-        saf = AzHelp.StorageAccountFactory(self.deployer)
-        acc = saf(self.storage_account_name, self.location, 'Standard_LRS', 'Hot')
+        saf = AzHelp.BlobStorageAccountFactory(self.auth)
+        acc = saf(self.location, self.resource_group_name, self.storage_account_name,
+                      'Standard_LRS', 'Hot')
         container = acc.create_block_blob_container('provisioning-data',
                                                     public=AzHelp.PublicAccess.Container)
         print "Uploading files"
