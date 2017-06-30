@@ -5,9 +5,24 @@ import json
 from azure.common.credentials import ServicePrincipalCredentials
 from azure.mgmt.resource import ResourceManagementClient
 from azure.mgmt.resource.resources.models import DeploymentMode
+
 from azure.mgmt.storage import StorageManagementClient
 from azure.mgmt.storage.models import StorageAccountCreateParameters, Sku, Kind
 from azure.storage.blob import BlockBlobService, PublicAccess
+
+from azure.mgmt.compute import ComputeManagementClient
+
+def cache_client(getter):
+    name = getter.func_name
+    
+    def ans(self):
+        try:
+            return self._clients[name]
+        except KeyError:
+            ans = getter(self)
+            self._clients[name] = ans
+            return ans
+    return ans
 
 class Auth(object):
     _credentials = None
@@ -53,6 +68,18 @@ class Auth(object):
             secret=self.GetCredentials('secret_id'),
             tenant=self.GetCredentials('tenant_id')
         )
+        self._clients = {}
+
+    @cache_client
+    def ResourceManagementClient(self):
+        return ResourceManagementClient(self.credentials, self.subscription_id)
+    @cache_client
+    def StorageManagementClient(self):
+        return StorageManagementClient(self.credentials, self.subscription_id)
+    @cache_client
+    def ComputeManagementClient(self):
+        return ComputeManagementClient(self.credentials, self.subscription_id)
+    pass
 
 class StorageAccount(object):
     """Minimal wrapper of a storage account"""
@@ -107,7 +134,7 @@ class Deployer(object):
     def __init__(self, auth, location, rg_name):
         """This will create the resource group"""
         self.auth = auth
-        self.client = ResourceManagementClient(auth.credentials, auth.subscription_id)
+        self.client = auth.ResourceManagementClient()
         self.rg = rg_name
         self.loc = location
         self.client.resource_groups.create_or_update(
@@ -138,12 +165,10 @@ class Deployer(object):
 
 class BlobStorageAccountFactory(object):
     def __init__(self, auth):
-        self.client = StorageManagementClient(auth.credentials,
-                                                      auth.subscription_id)
+        self.client = auth.StorageManagementClient()
         
         return
     def __call__(self, location, group_name, account_name, account_type, access_tier):
-        print "Creating storage account " + account_name
         # sku, kind, location, tags=None, custom_domain=None, encryption=None, access_tier=None
         params = StorageAccountCreateParameters(Sku(account_type),
                                                  Kind.blob_storage,
@@ -152,10 +177,7 @@ class BlobStorageAccountFactory(object):
         
         request = self.client.storage_accounts.create(group_name, account_name, params)
         request.wait()
-        print "Done"
-        print "Retrieving access keys"
         key_list = self.client.storage_accounts.list_keys(group_name,
                                                           account_name)
-        print "Done"
         return StorageAccount(account_name, key_list.keys[0].value)
     pass
