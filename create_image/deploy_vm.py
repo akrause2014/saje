@@ -1,55 +1,64 @@
 """A deployer class to deploy a template on Azure"""
+from __future__ import print_function
 import os.path
 from haikunator import Haikunator
 import AzHelp
 import ssh
-from azure.mgmt.compute.compute.models import Image, SubResource
+from azure.mgmt.compute.compute.models import Image, SubResource, VirtualMachineCaptureParameters
 
 class ImageCreator(object):
     admin_username = 'polnet'
     vm_size = 'Standard_H16r'
     base_vm_name = 'base'
     
-    def __init__(self, loc, output_rg_name, output_img_name, pub_ssh_key_path='~/.ssh/id_rsa.pub'):
-        self.output_group_name = output_rg_name
-        self.output_image_name = output_img_name
-        
+    def __init__(self, loc, out_grp_name, out_stg_acc_name, out_cont_name, out_img_name, verbose=1):
         self.location = loc
         
-        pub_ssh_key_path = os.path.expanduser(pub_ssh_key_path)
-        # Will raise if file not exists or not enough permission
-        with open(pub_ssh_key_path, 'r') as pub_ssh_file_fd:
-            self.pub_ssh_key = pub_ssh_file_fd.read()
-            
-        self.name_generator = Haikunator()
-        self.working_group_name = self.name_generator.haikunate()
+        self.output_group_name = out_grp_name
+        self.output_storage_account_name = out_stg_acc_name
+        self.output_container_name = out_cont_name
+        self.output_image_name = out_img_name
+        self.verbosity = verbose
+        self.ssh = ssh.CmdRunner()
         
+        namer = Haikunator()
+        self.base_vhd_container_name = namer.haikunate()
+        self.working_group_name = namer.haikunate()
+        self.working_storage_account_name = namer.haikunate(delimiter='')
+        self.dns_label_prefix = namer.haikunate()
+        self.working_group_name='divine-heart-0107'
+        self.working_storage_account_name='icyviolet8801'
         self.auth = AzHelp.Auth()
-        # Note this creates our resource group
-        print "Creating temporary resource group " + self.working_group_name
+        return
+
+    def critical(self, *args):
+        print(*args)
+        return
+    
+    def info(self, *args):
+        if self.verbosity >= 1:
+            print(*args)
+        return
+    
+    def debug(self, *args):
+        if self.verbosity >= 2:
+            print(*args)
+        return
+    
+    def __call__(self):
+        # with async() as a:
+        #     a.run(self.create_temp_sa)
+        #     a.run(self.create_out_sa)
+        self.create_temp_sa()
+        out_acc = self.create_out_sa()
+        
         self.deployer = AzHelp.Deployer(self.auth,
                                         self.location, self.working_group_name)
-        
-
-    def __call__(self):        
-        self.storage_account_name = self.name_generator.haikunate(delimiter='')
-        
-        print "Creating storage account " + self.storage_account_name
-        saf = AzHelp.BlobStorageAccountFactory(self.auth)
-        acc = saf(self.location, self.working_group_name, self.storage_account_name,
-                      'Standard_LRS', 'Hot')
-        container = acc.create_block_blob_container('provisioning-data',
-                                                    public=AzHelp.PublicAccess.Container)
-        print "Uploading files"
-        self.tarball_url = container.upload('hemelb.tar.gz', 'hemelb.tar.gz')
-        self.script_url = container.upload('node_prep.sh', 'node_prep.sh')
-        
         print "Creating base VM"
-        self.dns_label_prefix = self.name_generator.haikunate()
         self.create_base_vm()
         
         print "Deprovisioning over ssh"
-        ssh.run(self.admin_username, self.remote_hostname,
+        self.ssh.run(self.admin_username, self.remote_hostname,
                 'sudo /usr/sbin/waagent -deprovision+user --force') 
 
         print "Deallocate and generalise the VM"
@@ -58,18 +67,53 @@ class ImageCreator(object):
         client.virtual_machines.generalize(self.working_group_name, self.base_vm_name)
 
         print "Creating the image from VM"
+        vmcp = VirtualMachineCaptureParameters(self.output_image_name, self.output_container_name, False)
+        async = client.virtual_machines.capture(self.working_group_name, self.base_vm_name, vmcp)
+        template = async.result().output
+        
+        print "Deleting work resource group " + self.working_group_name
+        res_client = self.auth.ResourceManagementClient()
+        res_client.resource_groups.delete(self.working_group_name)
+        
+        print "Deleting work storage container " + self.base_vhd_container_name
+        out_acc.BlockBlobService.delete_container(self.base_vhd_container_name)
+        return template
+    
+    def create_temp_sa(self):
+        print "Creating temporary resource group " + self.working_group_name
+        res_client = self.auth.ResourceManagementClient()
+        res_client.resource_groups.create_or_update(
+            self.working_group_name, {'location': self.location}
+            )
+        
+        print "Creating temporary storage account " + self.working_storage_account_name
+        acc = AzHelp.StorageAccount.create(self.auth, self.location, self.working_group_name, self.working_storage_account_name,
+                                           'BlobStorage', 'Standard_LRS', 'Hot')
+        container = acc.BlockBlobService.create_container('provisioning-data',
+                                                          public=AzHelp.blob.PublicAccess.Container)
+        print "Uploading files"
+        self.tarball_url = container.upload('hemelb.tar.gz', 'hemelb.tar.gz')
+        self.script_url = container.upload('node_prep.sh', 'node_prep.sh')
+        
+        return
+    
+    def create_out_sa(self):
+        print "Creating output resource group " + self.output_group_name
         res_client = self.auth.ResourceManagementClient()
         res_client.resource_groups.create_or_update(
             self.output_group_name, {'location': self.location}
             )
-        vm = client.virtual_machines.get(self.working_group_name, self.base_vm_name)
-        img = Image(self.location, source_virtual_machine=SubResource(vm.id))
-        client.images.create_or_update(self.output_group_name,
-                                       self.output_image_name, img).wait()
-        print "Deleting work resource group " + self.working_group_name
-        res_client.resource_groups.delete(self.working_group_name)
-        return
-    
+
+        print "Creating output storage account " + self.output_storage_account_name
+        acc = AzHelp.StorageAccount.create(self.auth, self.location,
+                                           self.output_group_name, self.output_storage_account_name,
+                                           'Storage', 'Standard_LRS', 'Hot')
+        
+        self.base_vhd_url = os.path.join(acc.primary_endpoints.blob,
+                                         self.base_vhd_container_name,
+                                         self.output_image_name + '.vhd')
+        return acc
+   
     @property
     def remote_hostname(self):
         return '{}.{}.cloudapp.azure.com'.format(self.dns_label_prefix, self.location)
@@ -87,8 +131,9 @@ class ImageCreator(object):
             'publicIpAddressName': self.base_vm_name + '-ip',
             'customiseNodeScriptUri': self.script_url,
             'customiseNodeTarballUri': self.tarball_url,
-            'adminPublicKey': self.pub_ssh_key,
+            'adminPublicKey': self.ssh.pubkey,
             'dnsLabelPrefix': self.dns_label_prefix,
+            'vhdUri': self.base_vhd_url
             }
         self.deployer('vmtemplate.json', params)
         
@@ -96,6 +141,7 @@ class ImageCreator(object):
     pass
 
 if __name__ == "__main__":
-    creator = ImageCreator('westeurope', 'polnet-images', 'hemelb-0.1.0')
-    creator()
+    out_storage_acc = 'polnetretest'
+    creator = ImageCreator('westeurope', 'polnet-vhd', out_storage_acc, 'vhds', 'hemelb-0.1.0', verbose=1)
+    print creator()
     

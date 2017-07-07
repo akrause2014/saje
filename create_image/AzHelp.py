@@ -8,21 +8,20 @@ from azure.mgmt.resource.resources.models import DeploymentMode
 
 from azure.mgmt.storage import StorageManagementClient
 from azure.mgmt.storage.models import StorageAccountCreateParameters, Sku, Kind
-from azure.storage.blob import BlockBlobService, PublicAccess
+from azure.storage import blob
 
 from azure.mgmt.compute import ComputeManagementClient
 
-def cache_client(getter):
-    name = getter.func_name
-    
-    def ans(self):
+def cache(getter):
+    name = '_' + getter.func_name
+    def wrapper(self):
         try:
-            return self._clients[name]
-        except KeyError:
+            return getattr(self, name)
+        except AttributeError:
             ans = getter(self)
-            self._clients[name] = ans
+            setattr(self, name, ans)
             return ans
-    return ans
+    return wrapper
 
 class Auth(object):
     _credentials = None
@@ -68,36 +67,81 @@ class Auth(object):
             secret=self.GetCredentials('secret_id'),
             tenant=self.GetCredentials('tenant_id')
         )
-        self._clients = {}
 
-    @cache_client
+    @cache
     def ResourceManagementClient(self):
         return ResourceManagementClient(self.credentials, self.subscription_id)
-    @cache_client
+    @cache
     def StorageManagementClient(self):
         return StorageManagementClient(self.credentials, self.subscription_id)
-    @cache_client
+    @cache
     def ComputeManagementClient(self):
         return ComputeManagementClient(self.credentials, self.subscription_id)
     pass
 
+
 class StorageAccount(object):
     """Minimal wrapper of a storage account"""
+    @classmethod
+    def create(cls, auth, location, group_name, account_name, account_kind, account_type, access_tier=None):
+        client = auth.StorageManagementClient()
+        kwargs = {}
+        if account_kind == 'BlobStorage':
+            kwargs['access_tier'] = access_tier
+        params = StorageAccountCreateParameters(Sku(account_type),
+                                                account_kind,
+                                                location,
+                                                **kwargs)
+        
+        request = client.storage_accounts.create(group_name, account_name, params)
+        acc = request.result()
+        key_list = client.storage_accounts.list_keys(group_name,
+                                                          account_name)
+        return cls(acc, key_list.keys[0].value)
 
-    def __init__(self, name, key):
-        self.name = name
+    @classmethod
+    def open(cls, auth, group_name, account_name):
+        client = auth.StorageManagementClient()
+        acc = client.storage_accounts.get_properties(group_name, account_name)
+        key_list = client.storage_accounts.list_keys(group_name, account_name)
+        
+        return cls(acc, key_list.keys[0].value)
+    
+    def __init__(self, acc, key):
+        self.acc = acc
         self.key = key
-        self._block_blob_service = None
-
+        
+    def __getattr__(self, name):
+        try:
+            return getattr(self.acc, name)
+        except AttributeError:
+            raise AttributeError("Neither AzHelp.StorageAccount nor its delegate azure.mgmt.storage.StorageAccount have the attribute ''{}".format(name) )
     @property
+    @cache
+    def BaseBlobService(self):
+        return BlobService(blob.BaseBlobService(account_name=self.acc.name, account_key=self.key))
+    @property
+    @cache
     def BlockBlobService(self):
-        if self._block_blob_service is None:
-            self._block_blob_service = BlockBlobService(account_name=self.name, account_key=self.key)
-        return self._block_blob_service
+        return BlobService(blob.BlockBlobService(account_name=self.acc.name, account_key=self.key))
+    @property
+    @cache
+    def PageBlobService(self):
+        return BlobService(blob.PageBlobService(account_name=self.acc.name, account_key=self.key))
 
-    def create_block_blob_container(self, name, public=None):
-        print "Creating blob container " + name
-        return BlobContainer(self.BlockBlobService, name, public)
+class BlobService(object):
+    def __init__(self, az_blob_service):
+        self.blob_service = az_blob_service
+        
+    def create_container(self, name, public=None):
+        self.blob_service.create_container(name, public_access=public)
+        return BlobContainer(self.blob_service, name)
+    def delete_container(self, name):
+        return self.blob_service.delete_container(name)
+    def list_containers(self, prefix=None):
+        return self.blobservice.list_containers(self, prefix=prefix)
+    
+    pass
 
 class BlobContainer(object):
     """Minimal wrapper of a blob storage container"""
@@ -105,7 +149,6 @@ class BlobContainer(object):
     def __init__(self, blob_service, name, public=None):
         self.blob_service = blob_service
         self.name = name
-        blob_service.create_container(name, public_access=public)
         return
     
     def upload(self, blob_name, file_path):
@@ -128,18 +171,14 @@ class BlobContainer(object):
 
 class Deployer(object):
     """Deploy an ARM template.
-    Initialize with credentials, subscription, location and group
+    Initialize with credentials, location and group
     """
 
     def __init__(self, auth, location, rg_name):
-        """This will create the resource group"""
         self.auth = auth
         self.client = auth.ResourceManagementClient()
         self.rg = rg_name
         self.loc = location
-        self.client.resource_groups.create_or_update(
-            self.rg, {'location': self.loc}
-            )
         return
     
     def __call__(self, template_path, pdict={}):
@@ -163,21 +202,3 @@ class Deployer(object):
         return deployment_async_operation.result()
     pass
 
-class BlobStorageAccountFactory(object):
-    def __init__(self, auth):
-        self.client = auth.StorageManagementClient()
-        
-        return
-    def __call__(self, location, group_name, account_name, account_type, access_tier):
-        # sku, kind, location, tags=None, custom_domain=None, encryption=None, access_tier=None
-        params = StorageAccountCreateParameters(Sku(account_type),
-                                                 Kind.blob_storage,
-                                                 location,
-                                                 access_tier=access_tier)
-        
-        request = self.client.storage_accounts.create(group_name, account_name, params)
-        request.wait()
-        key_list = self.client.storage_accounts.list_keys(group_name,
-                                                          account_name)
-        return StorageAccount(account_name, key_list.keys[0].value)
-    pass
