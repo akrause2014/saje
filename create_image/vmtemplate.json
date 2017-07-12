@@ -35,11 +35,11 @@
 	"dnsLabelPrefix": {
 	    "type": "string"
 	},
-	"customiseNodeScriptUri": {
+	"customiseNodeCommand": {
 	    "type": "string"
 	},
-	"customiseNodeTarballUri": {
-	    "type": "string"
+	"customiseNodeUris": {
+	    "type": "array"
 	},
 	"vhdUri": {
 	    "type": "string"
@@ -205,11 +205,8 @@
 		"typeHandlerVersion": "2.0",
 		"autoUpgradeMinorVersion": true,
 		"settings": {
-		    "fileUris": [
-			"[parameters('customiseNodeScriptUri')]",
-			"[parameters('customiseNodeTarballUri')]"
-		    ],
-		    "commandToExecute": "sh node_prep.sh"
+		    "fileUris": "[parameters('customiseNodeUris')]",
+		    "commandToExecute": "[parameters('customiseNodeCommand')]"
 		}
 	    }
 	}

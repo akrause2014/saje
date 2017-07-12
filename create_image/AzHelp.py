@@ -12,6 +12,8 @@ from azure.storage import blob
 
 from azure.mgmt.compute import ComputeManagementClient
 
+from status import StatusReporter
+
 def cache(getter):
     name = '_' + getter.func_name
     def wrapper(self):
@@ -169,12 +171,13 @@ class BlobContainer(object):
     
     pass
 
-class Deployer(object):
+class Deployer(StatusReporter):
     """Deploy an ARM template.
     Initialize with credentials, location and group
     """
 
-    def __init__(self, auth, location, rg_name):
+    def __init__(self, auth, location, rg_name, verbosity=1):
+        self.verbosity = verbosity
         self.auth = auth
         self.client = auth.ResourceManagementClient()
         self.rg = rg_name
