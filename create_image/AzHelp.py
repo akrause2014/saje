@@ -1,16 +1,20 @@
 import os.path
 import ConfigParser
 import json
+import datetime
 
 from azure.common.credentials import ServicePrincipalCredentials
 from azure.mgmt.resource import ResourceManagementClient
 from azure.mgmt.resource.resources.models import DeploymentMode
 
 from azure.mgmt.storage import StorageManagementClient
+from azure.mgmt.compute import ComputeManagementClient
+from azure.mgmt.batch import BatchManagementClient
+from azure.mgmt.keyvault import KeyVaultManagementClient
+
 from azure.mgmt.storage.models import StorageAccountCreateParameters, Sku, Kind
 from azure.storage import blob
 
-from azure.mgmt.compute import ComputeManagementClient
 
 from status import StatusReporter
 
@@ -79,6 +83,13 @@ class Auth(object):
     @cache
     def ComputeManagementClient(self):
         return ComputeManagementClient(self.credentials, self.subscription_id)
+    @cache
+    def BatchManagementClient(self):
+        return BatchManagementClient(self.credentials, self.subscription_id)
+    @cache
+    def KeyVaultManagementClient(self):
+        return KeyVaultManagementClient(self.credentials, self.subscription_id)
+
     pass
 
 
@@ -135,8 +146,8 @@ class BlobService(object):
     def __init__(self, az_blob_service):
         self.blob_service = az_blob_service
         
-    def create_container(self, name, public=None):
-        self.blob_service.create_container(name, public_access=public)
+    def create_container(self, name, public=None, fail_on_exist=True):
+        self.blob_service.create_container(name, public_access=public, fail_on_exist=fail_on_exist)
         return BlobContainer(self.blob_service, name)
     def delete_container(self, name):
         return self.blob_service.delete_container(name)
@@ -165,7 +176,14 @@ class BlobContainer(object):
 
     def url(self, blob_name):
         return self.blob_service.make_blob_url(self.name, blob_name)
-    
+
+    def generate_sas(self, permissions):
+        return self.blob_service.generate_container_shared_access_signature(
+            self.name,
+            permission=permissions,
+            expiry=datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+            )
+        
     def __iter__(self):
         return iter(self.blob_service.list_blobs(self.name))
     
