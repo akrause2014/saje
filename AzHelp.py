@@ -210,12 +210,11 @@ class Deployer(StatusReporter):
     Initialize with credentials, location and group
     """
 
-    def __init__(self, auth, location, rg_name, verbosity=1):
+    def __init__(self, auth, rg_name, verbosity=1):
         self.verbosity = verbosity
         self.auth = auth
         self.client = auth.ResourceManagementClient()
         self.rg = rg_name
-        self.loc = location
         return
     
     def __call__(self, template_path, pdict={}):

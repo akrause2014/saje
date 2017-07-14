@@ -95,8 +95,7 @@ class ImageTester(StatusReporter):
             self.use_tmp_key = True
 
         self.info("Deploying VM")
-        self.deployer = AzHelp.Deployer(self.auth,
-                                        self.location, self.working_group_name)
+        self.deployer = AzHelp.Deployer(self.auth, self.working_group_name)
         admin_user = os.getlogin()
         params = {
             'virtualMachineName': 'test',

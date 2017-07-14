@@ -39,7 +39,7 @@ class ImageCreator(StatusReporter):
         out_acc = self.create_out_sa()
         
         self.deployer = AzHelp.Deployer(self.auth,
-                                        self.location, self.working_group_name)
+                                        self.working_group_name)
         self.info("Creating base VM")
         self.create_base_vm()
         
