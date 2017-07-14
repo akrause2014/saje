@@ -1,0 +1,85 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "batchAccountName": {
+            "type": "string"
+        },
+	"vaultName": {
+	    "type": "string",
+	    "defaultValue": "[concat(parameters('batchAccountName'),'-vault')]"
+	},
+        "storageAccountName": {
+            "type": "string",
+	    "defaultValue": "[concat(parameters('batchAccountName'),'storage')]"
+        },
+        "storageAccountType": {
+            "type": "string",
+	    "defaultValue": "Standard_LRS"
+        },
+	"batchServicePrincipleObjectId": {
+	    "type": "string",
+	    "defaultValue": "47aa070b-700b-4e4c-bc99-d2de9a6673d7"
+	}
+    },
+    "variables": {
+    },
+    "resources": [
+	{
+            "type": "Microsoft.KeyVault/vaults",
+            "name": "[parameters('vaultName')]",
+            "apiVersion": "2016-10-01",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "sku": {
+                    "family": "A",
+                    "name": "Standard"
+                },
+                "tenantId": "[subscription().tenantId]",
+                "accessPolicies": [
+                    {
+                        "tenantId": "[subscription().tenantId]",
+                        "objectId": "[parameters('batchServicePrincipleObjectId')]",
+                        "permissions": {
+                            "secrets": [
+                                "All"
+                            ]
+                        }
+                    }
+                ],
+                "enabledForDeployment": true
+            },
+            "dependsOn": []
+        },
+        {
+            "name": "[parameters('batchAccountName')]",
+            "type": "Microsoft.Batch/batchAccounts",
+            "apiVersion": "2017-05-01",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[concat('Microsoft.Storage/storageAccounts/', parameters('storageAccountName'))]"
+            ],
+            "properties": {
+                "poolAllocationMode": "usersubscription",
+                "KeyVaultReference": {
+                    "id": "[resourceId('Microsoft.KeyVault/vaults', parameters('vaultName'))]",
+                    "url": "[reference(concat('Microsoft.KeyVault/vaults/', parameters('vaultName'))).vaultUri]"
+                },
+                "autoStorage": {
+                    "storageAccountId": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+                }
+            }
+        },
+        {
+            "name": "[parameters('storageAccountName')]",
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2015-06-15",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "accountType": "[parameters('storageAccountType')]"
+            }
+        }
+    ]
+}
+
+

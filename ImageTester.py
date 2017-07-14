@@ -135,7 +135,6 @@ if __name__ == "__main__":
     import argparse
     
     parser = argparse.ArgumentParser(description="Create an Azure VHD image based on Centos 7.1 HPC")
-    # -v -g hemeprep --storage-account hemelb --container vhds --image hemelb-0.1.0 node_prep.sh hemelb.tar.gz 
 
     parser.add_argument("--verbose", "-v", action="count", default=0,
                         help="Increase the verbosity level - can be provided multiple times")
@@ -155,8 +154,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     verbosity = args.verbose - args.quiet + 1
 
-    auth = AzHelp.Auth()
-    
     tester = ImageTester(args.location, args.resource_group, args.storage_account, args.dns, verbosity=verbosity)
     ssh_cmd = tester.create(args.vhd_url)
     command = raw_input("Test VM created. Access with:\n" + ssh_cmd + "\n[K]eep it or [d]elete it?").lower()
