@@ -2,6 +2,8 @@ import os.path
 import ConfigParser
 import json
 import datetime
+import time
+import operator
 
 from azure.common.credentials import ServicePrincipalCredentials
 from azure.mgmt.resource import ResourceManagementClient
@@ -16,7 +18,7 @@ from azure.mgmt.storage.models import StorageAccountCreateParameters, Sku, Kind
 from azure.storage import blob
 
 
-from status import StatusReporter
+from .status import StatusReporter
 
 def cache(getter):
     name = '_' + getter.func_name
@@ -131,10 +133,6 @@ class StorageAccount(object):
             raise AttributeError("Neither AzHelp.StorageAccount nor its delegate azure.mgmt.storage.StorageAccount have the attribute ''{}".format(name) )
     @property
     @cache
-    def BaseBlobService(self):
-        return BlobService(blob.BaseBlobService(account_name=self.acc.name, account_key=self.key))
-    @property
-    @cache
     def BlockBlobService(self):
         return BlobService(blob.BlockBlobService(account_name=self.acc.name, account_key=self.key))
     @property
@@ -146,13 +144,20 @@ class BlobService(object):
     def __init__(self, az_blob_service):
         self.blob_service = az_blob_service
         
+    def get_container(self, name):
+        assert self.exists(name)
+        return BlobContainer(self.blob_service, name)
+    
     def create_container(self, name, public=None, fail_on_exist=True):
         self.blob_service.create_container(name, public_access=public, fail_on_exist=fail_on_exist)
         return BlobContainer(self.blob_service, name)
     def delete_container(self, name):
         return self.blob_service.delete_container(name)
     def list_containers(self, prefix=None):
-        return self.blobservice.list_containers(self, prefix=prefix)
+        return self.blob_service.list_containers(self, prefix=prefix)
+
+    def exists(self, container, blob=None):
+        return self.blob_service.exists(container, blob)
     
     pass
 
@@ -174,6 +179,17 @@ class BlobContainer(object):
     def delete(self, blob_name):
         self.blob_service.delete_blob(self.name, blob_name)
 
+    def copy(self, blob_name, src_url):
+        copy_prop = self.blob_service.copy_blob(self.name, blob_name, src_url)
+        while copy_prop.status == 'pending':
+            time.sleep(1)
+            copy_prop = self.blob_service.get_blob_properties(self.name, blob_name).properties.copy
+            
+        return self.url(blob_name)
+    
+    def exists(self, blob):
+        return self.blob_service.exists(self.name, blob)
+    
     def url(self, blob_name):
         return self.blob_service.make_blob_url(self.name, blob_name)
 

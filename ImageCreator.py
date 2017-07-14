@@ -4,9 +4,10 @@ import os.path
 from haikunator import Haikunator
 from azure.mgmt.compute.compute.models import Image, SubResource, VirtualMachineCaptureParameters
 
-import AzHelp
-import ssh
-from status import StatusReporter
+from . import AzHelp
+from . import ssh
+from .status import StatusReporter
+from . import resources
 
 class ImageCreator(StatusReporter):
     admin_username = 'imgcreator'
@@ -25,7 +26,6 @@ class ImageCreator(StatusReporter):
         self.ssh = ssh.CmdRunner(verbosity=self.verbosity)
         
         namer = Haikunator()
-        self.base_vhd_container_name = namer.haikunate()
         self.working_group_name = namer.haikunate()
         self.working_storage_account_name = namer.haikunate(delimiter='')
         self.dns_label_prefix = namer.haikunate()
@@ -52,19 +52,12 @@ class ImageCreator(StatusReporter):
         client.virtual_machines.deallocate(self.working_group_name, self.base_vm_name).wait()
         client.virtual_machines.generalize(self.working_group_name, self.base_vm_name)
 
-        self.info("Creating the image from VM")
-        vmcp = VirtualMachineCaptureParameters(self.output_image_name, self.output_container_name, False)
-        async = client.virtual_machines.capture(self.working_group_name, self.base_vm_name, vmcp)
-        template = async.result().output
-
         if not self.keep:
             self.info("Deleting work resource group", self.working_group_name)
             res_client = self.auth.ResourceManagementClient()
             res_client.resource_groups.delete(self.working_group_name)
         
-            self.info("Deleting work storage container", self.base_vhd_container_name)
-            out_acc.BlockBlobService.delete_container(self.base_vhd_container_name)
-        return template
+        
     
     def create_temp_sa(self, script, *other_files):
         self.info("Creating temporary resource group", self.working_group_name)
@@ -82,7 +75,7 @@ class ImageCreator(StatusReporter):
         def upld(path):
             base = os.path.basename(path)
             self.debug("{} -> {}".format(path, container.url(base)))
-            return container.upload(path, base)
+            return container.upload(base, path)
         
         self.customise_cmd = "sh {}".format(os.path.basename(script))
         self.data_urls = [upld(script)]
@@ -104,7 +97,7 @@ class ImageCreator(StatusReporter):
                                            'Storage', 'Standard_LRS', 'Hot')
         
         self.base_vhd_url = os.path.join(acc.primary_endpoints.blob,
-                                         self.base_vhd_container_name,
+                                         self.output_container_name,
                                          self.output_image_name + '.vhd')
         return acc
    
@@ -129,7 +122,8 @@ class ImageCreator(StatusReporter):
             'dnsLabelPrefix': self.dns_label_prefix,
             'vhdUri': self.base_vhd_url
             }
-        self.deployer('vmtemplate.json', params)
+        template_path = resources.get('image_creation', 'vmtemplate.json')
+        self.deployer(template_path, params)
         
         return
     pass
@@ -165,5 +159,6 @@ if __name__ == "__main__":
     verbosity = args.verbose - args.quiet + 1
     
     creator = ImageCreator(args.location, args.resource_group, args.storage_account, args.container, args.image, verbosity=verbosity, keep=args.keep)
-    print(creator(args.script, *args.other_files))
+    creator(args.script, *args.other_files)
+    print(creator.base_vhd_url)
     

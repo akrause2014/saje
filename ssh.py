@@ -1,5 +1,5 @@
 import paramiko
-from status import StatusReporter
+from .status import StatusReporter
 
 class IgnorePolicy(paramiko.MissingHostKeyPolicy):
     def missing_host_key(self, client, hostname, key):
