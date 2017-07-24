@@ -1,11 +1,12 @@
 import os.path
-import ConfigParser
 import json
 import datetime
 import time
 import operator
 
-from azure.common.credentials import ServicePrincipalCredentials
+import adal
+from msrestazure.azure_active_directory import AdalAuthentication
+
 from azure.mgmt.resource import ResourceManagementClient
 from azure.mgmt.resource.resources.models import DeploymentMode
 
@@ -13,8 +14,9 @@ from azure.mgmt.storage import StorageManagementClient
 from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.batch import BatchManagementClient
 from azure.mgmt.keyvault import KeyVaultManagementClient
-
 from azure.mgmt.storage.models import StorageAccountCreateParameters, Sku, Kind
+
+from azure import batch
 from azure.storage import blob
 
 
@@ -32,65 +34,60 @@ def cache(getter):
     return wrapper
 
 class Auth(object):
-    _credentials = None
-    @classmethod
-    def GetCredentials(cls, wanted_key=None):
-        if cls._credentials is None:
-            cls._credentials = cls._ReadCredentials()
-        
-        if wanted_key is None:
-            return cls._credentials
-        else:
-            return cls._credentials[wanted_key]
-
-    @classmethod
-    def _ReadCredentials(cls):
-        names = ['subscription_id', 'client_id', 'secret_id', 'tenant_id']
-        env_vars = ['AZURE_SUBSCRIPTION_ID', 'AZURE_CLIENT_ID', 'AZURE_CLIENT_SECRET', 'AZURE_TENANT_ID']
-        ans = {}
-        cred_file = os.path.expanduser('~/.azure/credentials')
-        
-        if os.path.exists(cred_file):
-            # Read from credentials first
-            cp = ConfigParser.ConfigParser()
-            cp.read(cred_file)
-            for key in names:
-                ans[key] = cp.get('default', key)
-                
-        # Allow env to override
-        for ev, key in zip(env_vars, names):
-            val = os.environ.get(ev, None)
-            if val is not None:
-                ans[key] = val
-            
-        # check we've got them all
-        for key in names:
-            assert key in ans, "Missing value of '{}'".format(key)
-        return ans
+    default_config = os.path.expanduser('~/.azure/polnet.json')
+    login_endpoint = 'https://login.microsoftonline.com/'
     
-    def __init__(self):
-        self.subscription_id = self.GetCredentials('subscription_id')
-        self.credentials = ServicePrincipalCredentials(
-            client_id=self.GetCredentials('client_id'),
-            secret=self.GetCredentials('secret_id'),
-            tenant=self.GetCredentials('tenant_id')
-        )
+    def __init__(self, name='default', config_path=None):
+        if config_path is None:
+            config_path = self.default_config
+
+        with open(config_path) as cf:
+            config = json.load(cf)
+            
+        all_creds = {c['name']: c for c in config['credentials']}
+        cred = all_creds[name]
+
+        self.tenant_id = str(cred['tenant_id'])
+        self.subscription_id = str(cred['subscription_id'])
+        self.client_id = str(cred['client_id'])
+        self.secret = str(cred['secret'])
+
+        self.context = adal.AuthenticationContext(self.login_endpoint + self.tenant_id)
+        self._resource_credentials = {}
+    
+    def GetCredentialsForResource(self, resource):
+        try:
+            return self._resource_credentials[resource]
+        except KeyError:
+            ans = AdalAuthentication(self.context.acquire_token_with_client_credentials,
+                                     resource, self.client_id, self.secret)
+            self._resource_credentials[resource] = ans
+            return ans        
+    @property
+    def ManagementCredentials(self):
+        return self.GetCredentialsForResource('https://management.azure.com/')
 
     @cache
     def ResourceManagementClient(self):
-        return ResourceManagementClient(self.credentials, self.subscription_id)
+        return ResourceManagementClient(self.ManagementCredentials, self.subscription_id)
+    
     @cache
     def StorageManagementClient(self):
-        return StorageManagementClient(self.credentials, self.subscription_id)
+        return StorageManagementClient(self.ManagementCredentials, self.subscription_id)
+    
     @cache
     def ComputeManagementClient(self):
-        return ComputeManagementClient(self.credentials, self.subscription_id)
+        return ComputeManagementClient(self.ManagementCredentials, self.subscription_id)
+    
     @cache
     def BatchManagementClient(self):
-        return BatchManagementClient(self.credentials, self.subscription_id)
+        return BatchManagementClient(self.ManagementCredentials, self.subscription_id)
+    def BatchServiceClient(self, base_url=None):
+        return batch.BatchServiceClient(self.GetCredentialsForResource('https://batch.core.windows.net/'), base_url=base_url)
+   
     @cache
     def KeyVaultManagementClient(self):
-        return KeyVaultManagementClient(self.credentials, self.subscription_id)
+        return KeyVaultManagementClient(self.ManagementCredentials, self.subscription_id)
 
     pass
 
@@ -153,9 +150,11 @@ class BlobService(object):
         return BlobContainer(self.blob_service, name)
     def delete_container(self, name):
         return self.blob_service.delete_container(name)
+    
     def list_containers(self, prefix=None):
-        return self.blob_service.list_containers(self, prefix=prefix)
-
+        for raw_c in self.blob_service.list_containers(prefix=prefix):
+            yield BlobContainer(self.blob_service, raw_c.name)
+    
     def exists(self, container, blob=None):
         return self.blob_service.exists(container, blob)
     
@@ -164,7 +163,7 @@ class BlobService(object):
 class BlobContainer(object):
     """Minimal wrapper of a blob storage container"""
     
-    def __init__(self, blob_service, name, public=None):
+    def __init__(self, blob_service, name):
         self.blob_service = blob_service
         self.name = name
         return
@@ -187,8 +186,12 @@ class BlobContainer(object):
             
         return self.url(blob_name)
     
-    def exists(self, blob):
-        return self.blob_service.exists(self.name, blob)
+    def exists(self, blob_name):
+        return self.blob_service.exists(self.name, blob_name)
+    
+    def list(self, prefix=None):
+        for b in self.blob_service.list_blobs(self.name, prefix=prefix):
+            yield b.name
     
     def url(self, blob_name):
         return self.blob_service.make_blob_url(self.name, blob_name)
