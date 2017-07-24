@@ -75,7 +75,7 @@ class ImageCreator(StatusReporter):
         def upld(path):
             base = os.path.basename(path)
             self.debug("{} -> {}".format(path, container.url(base)))
-            return container.upload(base, path)
+            return container.upload(path)
         
         self.customise_cmd = "sh {}".format(os.path.basename(script))
         self.data_urls = [upld(script)]

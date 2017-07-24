@@ -140,12 +140,18 @@ class StorageAccount(object):
 class BlobService(object):
     def __init__(self, az_blob_service):
         self.blob_service = az_blob_service
+
+    def __getattr__(self, name):
+        try:
+            return getattr(self.blob_service, name)
+        except AttributeError:
+            raise AttributeError("Neither AzHelp.BlobService nor its delegate azure.storage.blob.BaseBlobService have the attribute ''{}".format(name) )
         
     def get_container(self, name):
         assert self.exists(name)
         return BlobContainer(self.blob_service, name)
     
-    def create_container(self, name, public=None, fail_on_exist=True):
+    def create_container(self, name, public=None, fail_on_exist=False):
         self.blob_service.create_container(name, public_access=public, fail_on_exist=fail_on_exist)
         return BlobContainer(self.blob_service, name)
     def delete_container(self, name):
@@ -168,12 +174,23 @@ class BlobContainer(object):
         self.name = name
         return
     
-    def upload(self, blob_name, file_path):
+    def upload(self, file_path, blob_name=None):
+        if blob_name is None:
+            blob_name = os.path.basename(file_path)
+            
         self.blob_service.create_blob_from_path(self.name, blob_name, file_path)
         return self.url(blob_name)
     
     def download(self, blob_name, file_path):
         self.blob_service.get_blob_to_path(self.name, blob_name, file_path)
+
+    def from_str(self, blob_name, text):
+        self.blob_service.create_blob_from_text(self.name, blob_name, text)
+        return self.url(blob_name)
+
+    def to_str(self, blob_name):
+        blb = self.blob.service.get_blob_to_text(self.name, blob_name)
+        return blb.content
     
     def delete(self, blob_name):
         self.blob_service.delete_blob(self.name, blob_name)
@@ -193,8 +210,8 @@ class BlobContainer(object):
         for b in self.blob_service.list_blobs(self.name, prefix=prefix):
             yield b.name
     
-    def url(self, blob_name):
-        return self.blob_service.make_blob_url(self.name, blob_name)
+    def url(self, blob_name, sas_token=None):
+        return self.blob_service.make_blob_url(self.name, blob_name, sas_token=sas_token)
 
     def generate_sas(self, permissions):
         return self.blob_service.generate_container_shared_access_signature(

@@ -1,8 +1,8 @@
+
 import azure.batch.models as batchmodels
 
 from .status import StatusReporter
 from . import AzHelp
-from .helpers import select_latest_verified_vm_image_with_node_agent_sku
 
 class PoolCreator(StatusReporter):
     # This MUST match the VHD's OS
@@ -34,8 +34,7 @@ class PoolCreator(StatusReporter):
                                                  target_dedicated_nodes=n_nodes,
                                                  enable_auto_scale=False,
                                                  enable_inter_node_communication=True,
-                                                 max_tasks_per_node=1,
-                                                 user_accounts=[])
+                                                 max_tasks_per_node=1)
         self.client.pool.add(pool_conf)
         
     pass
