@@ -1,9 +1,32 @@
-
+import time
 import azure.batch.models as batchmodels
 
 from .status import StatusReporter
 from . import AzHelp
 
+class PoolStartWaiter(object):
+    def __init__(self, client, pool_id):
+        self.client = client
+        self.pool_id = pool_id
+        self.target_states = set((batchmodels.ComputeNodeState.idle,))
+        
+        return
+
+    def test(self):
+        p = self.client.pool.get(self.pool_id)
+        if p.resize_errors is not None:
+            raise RuntimeError('resize error encountered for pool {}:\n{}'.format(p.id, resize_errors))
+        nodes = list(self.client.compute_node.list(p.id))
+        if len(nodes) < p.target_dedicated_nodes:
+            return False
+        
+        return all(node.state in self.target_states for node in nodes)
+        
+    def wait(self):
+        while not self.test():
+            time.sleep(5)
+        return
+    
 class PoolCreator(StatusReporter):
     # This MUST match the VHD's OS
     AGENT_SKU_ID = 'batch.node.centos 7'
@@ -36,7 +59,8 @@ class PoolCreator(StatusReporter):
                                                  enable_inter_node_communication=True,
                                                  max_tasks_per_node=1)
         self.client.pool.add(pool_conf)
-        
+        return PoolStartWaiter(self.client, pool_name)
+    
     pass
 
 if __name__ == "__main__":
@@ -60,12 +84,16 @@ if __name__ == "__main__":
 
     parser.add_argument("--nodes", "-n", required=True, type=int,
                         help="Number of nodes to allocate")
+
+    parser.add_argument("--no-wait", action="store_true",
+                        help="Do not wait for the pool to provision and boot")
     
     args = parser.parse_args()
     verbosity = args.verbose - args.quiet + 1
 
     
     pc = PoolCreator(args.resource_group, args.batch_account, args.image_url)
-    pc(args.pool_name, args.nodes)
-    
-    
+    waiter = pc(args.pool_name, args.nodes)
+    if not args.no_wait:
+        waiter.wait()
+        

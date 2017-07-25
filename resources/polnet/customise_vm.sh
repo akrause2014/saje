@@ -17,4 +17,4 @@ cp -vr hemelb/bin hemelb/share /usr/
 rm -rf hemelb hemelb.tar.gz
 
 # Disable requiretty to allow run sudo within scripts
-#sed -i -e 's/Defaults    requiretty.*/ #Defaults    requiretty/g' /etc/sudoers
+sed -i -e 's/Defaults    requiretty.*/# Defaults    requiretty/g' /etc/sudoers
