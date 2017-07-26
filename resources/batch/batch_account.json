@@ -63,7 +63,7 @@
                 "poolAllocationMode": "usersubscription",
                 "KeyVaultReference": {
                     "id": "[resourceId('Microsoft.KeyVault/vaults', parameters('vaultName'))]",
-                    "url": "[reference(concat('Microsoft.KeyVault/vaults/', parameters('vaultName'))).vaultUri]"
+                    "url": "[uri(reference(concat('Microsoft.KeyVault/vaults/', parameters('vaultName'))).vaultUri, '')]"
                 },
                 "autoStorage": {
                     "storageAccountId": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"

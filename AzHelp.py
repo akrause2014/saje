@@ -15,6 +15,8 @@ from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.batch import BatchManagementClient
 from azure.mgmt.keyvault import KeyVaultManagementClient
 from azure.mgmt.storage.models import StorageAccountCreateParameters, Sku, Kind
+from azure.mgmt.authorization import AuthorizationManagementClient
+from azure.graphrbac import GraphRbacManagementClient
 
 from azure import batch
 from azure.storage import blob
@@ -23,7 +25,7 @@ from azure.storage import blob
 from .status import StatusReporter
 
 def cache(getter):
-    name = '_' + getter.func_name
+    name = '_' + getter.__name__
     def wrapper(self):
         try:
             return getattr(self, name)
@@ -89,6 +91,12 @@ class Auth(object):
     def KeyVaultManagementClient(self):
         return KeyVaultManagementClient(self.ManagementCredentials, self.subscription_id)
 
+    @cache
+    def AuthorizationManagementClient(self):
+        return AuthorizationManagementClient(self.ManagementCredentials, self.subscription_id)
+    @cache
+    def GraphRbacManagementClient(self):
+        return GraphRbacManagementClient(self.GetCredentialsForResource('https://graph.windows.net/'), self.tenant_id)
     pass
 
 

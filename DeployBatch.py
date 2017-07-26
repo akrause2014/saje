@@ -5,12 +5,12 @@ from . import resources
 
 def DeployBatch(location, group_name, batch_acc_name):
     auth = AzHelp.Auth()
-    res_client = self.auth.ResourceManagementClient()
+    res_client = auth.ResourceManagementClient()
     res_client.resource_groups.create_or_update(
         group_name, {'location': location}
         )
     dep = AzHelp.Deployer(auth, group_name)
-    dep(resources.get('image_creation', 'vmtemplate.json'),
+    dep(resources.get('batch', 'batch_account.json'),
             {'batchAccountName': batch_acc_name})
     
 
