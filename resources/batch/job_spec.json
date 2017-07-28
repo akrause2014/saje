@@ -1,0 +1,151 @@
+{
+    "$schema": "http://json-schema.org/schema#",
+    "title": "Polcloud Job Specification",
+    "definitions": {
+	"inputbase": {
+	    "type": "object",
+	    "properties": {
+		"name": {"type": "string"}
+	    },
+	    "required": ["type"]
+	},
+	
+	"inputfile": {
+	    "allOf": [
+		{"$ref": "#/definitions/inputbase"},
+		{
+		    "properties": {
+			"path": {"type": "string"}
+		    },
+		    "required": ["path"]
+		}
+	    ]
+	},
+	
+	"inputpattern": {
+	    "allOf": [
+		{"$ref": "#/definitions/inputbase"},
+		{
+		    "properties": {
+			"pattern": {"type": "string"}
+		    },
+		    "required": ["pattern"]
+		}
+	    ]
+	},
+	    
+	"inputitem": {
+	    "anyOf": [
+		{"$ref": "#/definitions/inputfile"},
+		{"$ref": "#/definitions/inputpattern"}
+	    ]
+	},
+
+	"commandbase": {
+	    "type": "object",
+	    "properties": {
+		"name": {"type": "string"},
+		"redirect": {"type": "boolean"}
+	    },
+	    "required": ["type"]
+	},
+
+	"serialcommand": {
+	    "allOf": [
+		{"$ref": "#/definitions/commandbase"},
+		{
+		    "properties": {
+			"expression": {"type": "string"}
+		    },
+		    "required": ["expression"]
+		}
+	    ]
+	},
+	"parallelcommand": {
+	    "allOf": [
+		{"$ref": "#/definitions/commandbase"},
+		{
+		    "properties": {
+			"expression": {"type": "string"}
+		    },
+		    "required": ["expression"]
+		}
+	    ]
+	},
+
+	"commanditem": {
+	    "anyOf": [
+		{"$ref": "#/definitions/serialcommand"},
+		{"$ref": "#/definitions/parallelcommand"}
+	    ]
+	},
+
+	"outputbase": {
+	    "type": "object",
+	    "properties": {
+		"name": {"type": "string"}
+	    },
+	    "required": ["type"]
+	},
+	
+	"outputfile": {
+	    "allOf": [
+		{"$ref": "#/definitions/outputbase"},
+		{
+		    "properties": {
+			"path": {"type": "string"}
+		    },
+		    "required": ["path"]
+		}
+	    ]
+	},
+	
+	"outputpattern": {
+	    "allOf": [
+		{"$ref": "#/definitions/outputbase"},
+		{
+		    "properties": {
+			"pattern": {"type": "string"}
+		    },
+		    "required": ["pattern"]
+		}
+	    ]
+	},
+	"outputitem": {
+	    "anyOf": [
+		{"$ref": "#/definitions/outputfile"},
+		{"$ref": "#/definitions/outputpattern"}
+	    ]
+	}
+    },
+    
+    "type": "object",
+    "properties": {
+	"name": {
+	    "type": "string"
+	},
+	
+	"inputs": {
+	    "type": "array",
+	    "items": {
+		"$ref": "#/definitions/inputitem"
+	    }
+	},
+	
+	"commands": {
+	    "type": "array",
+	    "items": {
+		"$ref": "#/definitions/commanditem"
+	    },
+	    "minItems": 1
+	},
+	
+	"outputs": {
+	    "type": "array",
+	    "items": {
+		"$ref": "#/definitions/outputitem"
+	    }
+	}
+    },
+    "required": ["name", "commands"]
+}
