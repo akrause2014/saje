@@ -31,3 +31,26 @@ Run PolNet in the cloud!
    ]
 }
 ```
+
+## Workflow
+
+1. Setup tasks - cost tiny amounts
+    1. Create the batch account and related infrastructure with
+	`DeployBatch.py`
+   
+    2. Authorise your app to access Batch resources and the resource
+	group (manual task in the portal at the moment)
+   
+    3. Create an image with `ImageCreator.py`
+    
+    4. (Optionally) test that it works as intended with
+    `ImageTester.py`
+    
+2. Run tasks - note that this costs money as long as the pool is running!
+    5. Create a pool with `CreatePool.py`
+	
+	6. Add one or more jobs with `CreateJob.py`
+	
+	7. Delete the pool with `DeletePool.py`
+
+

@@ -134,7 +134,7 @@ class ImageTester(StatusReporter):
 if __name__ == "__main__":
     import argparse
     
-    parser = argparse.ArgumentParser(description="Create an Azure VHD image based on Centos 7.1 HPC")
+    parser = argparse.ArgumentParser(description="Test your VHD works by deploying a VM and associated infrastructure")
 
     parser.add_argument("--verbose", "-v", action="count", default=0,
                         help="Increase the verbosity level - can be provided multiple times")
