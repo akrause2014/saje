@@ -11,123 +11,8 @@ from . import AzHelp
 from .status import StatusReporter
 from .CreatePool import PoolCreator
 from . import resources
-from .JobSpec import JobSpec
+from .JobSpec import JobSpec, ReproducibleHash
 
-class Blob(object):
-    def __init__(self, base, url):
-        self.base = base
-        self.url = url
-        self.resource = batch.models.ResourceFile(self.url, self.base)
-        
-class Uploader(StatusReporter):
-    def __init__(self, container, sas, verbosity=1):
-        self.verbosity = verbosity
-        self.cont = container
-        self.sas = sas
-
-    def file(self, path):
-        base = os.path.basename(path)
-        url = self.cont.url(base, sas_token=self.sas)
-        self.info('Uploading {} -> {}'.format(path, url))
-        self.cont.upload(path)
-        return Blob(base, url)
-
-    def string(self, blob_name, text):
-        url = self.cont.url(blob_name, sas_token=self.sas)
-        self.info('Uploading string -> {}'.format(url))
-        self.cont.from_str(blob_name, text)
-        return Blob(blob_name, url)
-    pass
-
-def DemangleId(az_id):
-    parts = az_id.split('/')
-    
-    p = parts.pop(0)
-    assert p == ''
-
-    ans = {}
-    
-    p = parts.pop(0)
-    assert p == 'subscriptions'
-    ans['subscription'] = parts.pop(0)
-
-    p = parts.pop(0)
-    assert p == 'resourceGroups'
-    ans['resourceGroup'] = parts.pop(0)
-    
-    if len(parts):
-        p = parts.pop(0)
-        assert p == 'providers'
-        ans['provider'] = parts.pop(0)
-        ans['resource'] = parts.pop(0)
-        ans['name'] = parts.pop(0)
-
-        if len(parts):
-            ans['subparts'] = parts
-    return ans
-
-def IsValidContainerName(c_name):
-    """Check the string matches Azure Blob storage container name rules:
-    
-    A container name must be a valid DNS name, conforming to the following naming rules:
-
-    1. Container names must start with a letter or number, and can
-    contain only letters, numbers, and the dash (-) character.
-
-    2. Every dash (-) character must be immediately preceded and
-    followed by a letter or number; consecutive dashes are not permitted
-    in container names.
-    
-    3. All letters in a container name must be lowercase.
-
-    4. Container names must be from 3 through 63 characters long.
-    """
-    # rule 1 and start/finish dashes from 2
-    if not re.match('^[a-z0-9][a-z0-9-]*[a-z0-9]$', c_name):
-        return False
-    
-    # rule 2 double dash
-    if re.search('--', c_name):
-        return False
-    
-    # rule 3
-    if c_name.isupper():
-        return False
-
-    # rule 4
-    if len(c_name) < 3 or len(c_name) > 63:
-        return False
-
-    return True
-
-def JobContainerName(job_id):
-    """Implement the Azure Batch conventions on job container names.
-    
-    https://github.com/Azure/azure-sdk-for-net/tree/vs17Dev/src/SDKs/Batch/Support/FileConventions#job-output-container-name
-    """
-    # Normalize the job ID to lower case
-    norm_id = job_id.lower()
-    # If prepending "job-" to the normalized ID gives a valid
-    # container name, use that
-    c_name = 'job-' + norm_id
-    if IsValidContainerName(c_name):
-        return c_name
-    
-    # Calculate the SHA1 hash of the normalized ID, and express it as a 40-character hex string.
-    sha1 = hashlib.sha1(c_name).hexdigest()
-    # Replace all sequences of one or more hyphens or underscores in
-    # the normalized ID by single hyphens, then remove any leading or
-    # trailing hyphens.
-    c_name = re.sub('[-_]+', '-', norm_id).strip('-')
-    # If the resulting string is empty, use the string "job" instead.
-    c_name = 'job' if c_name == '' else c_name
-    # If the resulting string is longer than 15 characters, truncate
-    # it to 15 characters. If truncation results in a trailing hyphen,
-    # remove it.
-    c_name = c_name[:15].strip('-')
-    # The container name is the string "job-", followed by the
-    # truncated ID, followed by a hyphen, followed by the hash.
-    return 'job-' + c_name +'-' + sha1
 
 class JobCreator(StatusReporter):
     node_size = 16
@@ -152,7 +37,7 @@ class JobCreator(StatusReporter):
         self.batch_url = batch_url
 
         storage_id = self.batch_account.auto_storage.storage_account_id
-        storage_name = DemangleId(storage_id)['name']
+        storage_name = AzHelp.DemangleId(storage_id)['name']
         
         self.debug('Opening storage account', storage_name)
         storage = AzHelp.StorageAccount.open(self.auth, self.group_name, storage_name)
@@ -161,25 +46,23 @@ class JobCreator(StatusReporter):
         self.debug('Creating batch client')
         self.batch_client = self.auth.BatchServiceClient(base_url=batch_url)
         return
-    
+
     def __call__(self, pool_name, requested_nodes, job_spec_file):
-        job = JobSpec(job_spec_file)
+        job = JobSpec.open(job_spec_file)
         
         job_id = uuid.uuid4()
         self.info('Job ID:', job_id)
         
+        input_command_str = self._PrepareInput(job.inputs)
         pool, n_nodes = self._PoolSetup(pool_name, requested_nodes)
 
-        job_input_container = 'input-' + job.name
         job_output_container = str(job_id)
-        in_uploader, (out_cont_url, out_sas) = self._StorageSetup(job_input_container, job_output_container)
+        self.info('Output container:', job_output_container)
+        out_cont = self.blob_service.create_container(job_output_container)
+        out_sas = out_cont.generate_sas(ContainerPermissions.WRITE | ContainerPermissions.READ)
+        out_cont_url = 'https://{}/{}'.format(self.blob_service.primary_endpoint, job_output_container)
         
-        self.info('Processing job spec')
-        input_commands = []
-        for input_item in job.inputs:
-            input_commands += input_item.process(in_uploader)
-
-
+        self.debug('Processing job spec')
         exec_commands = []
         for cmd in job.commands:
             exec_commands += cmd.process(len(exec_commands))
@@ -191,10 +74,11 @@ class JobCreator(StatusReporter):
         self.debug('Preparing run script')
         with open(resources.get('batch', 'run_template.sh')) as f:
             run_script_template = f.read()
-                
+            pass
+        
         run_script = run_script_template.format(
             job_id=job_id,
-            input='\n'.join(input_commands),
+            input=input_command_str,
             commands='\n'.join(exec_commands),
             output='\n'.join(output_commands),
             
@@ -206,9 +90,16 @@ class JobCreator(StatusReporter):
         self.debug(run_script)
         
         self.info('Uploading run and coordination scripts')
-        run_blob = in_uploader.string('{}.sh'.format(job_id), run_script)
-        coord_path = resources.get('batch', 'coordination.sh')
-        coord_blob = in_uploader.file(coord_path)
+        run = 'run.sh'
+        run_url = out_cont.url(run, sas_token=out_sas)
+        out_cont.from_str(run, run_script)
+        run_resource = batch.models.ResourceFile(run_url, run)
+        
+        coord = 'coordination.sh'
+        coord_path = resources.get('batch', coord)
+        coord_url = out_cont.url(coord, sas_token=out_sas)
+        out_cont.upload(coord_path, coord)
+        coord_resource = batch.models.ResourceFile(coord_url, coord)
 
         self.info('Submitting job')
         pool_info = batch.models.PoolInformation(pool_name)
@@ -218,11 +109,11 @@ class JobCreator(StatusReporter):
         sudoer =  batch.models.UserIdentity(auto_user=batch.models.AutoUserSpecification(elevation_level='admin'))
         mpi = batch.models.MultiInstanceSettings(n_nodes,
                                                  coordination_command_line="../coordination.sh",
-                                                 common_resource_files=[coord_blob.resource])
+                                                 common_resource_files=[coord_resource])
         
         task_param = batch.models.TaskAddParameter(id=self.task_id,
-                                                   resource_files=[run_blob.resource],
-                                                   command_line='sudo -u _azbatch ./{}.sh'.format(job_id),
+                                                   resource_files=[run_resource],
+                                                   command_line='sudo -u _azbatch ./run.sh',
                                                    multi_instance_settings=mpi,
                                                    user_identity=sudoer)
         self.batch_client.task.add(job_id, task_param)
@@ -242,19 +133,57 @@ class JobCreator(StatusReporter):
             raise RuntimeError('Requested more nodes that in the pool')
         
         return pool, n_nodes
-    
-    def _StorageSetup(self, job_input_container, job_output_container):
-        self.debug('Create input container', job_input_container)
-        in_cont = self.blob_service.create_container(job_input_container)
+
+    def _PrepareInput(self, input_spec):
+        # Generate a unique name that depends on the input
+        hashable = [i.ToJson() for i in input_spec]
+        # Start with the SHA1 of the input specification
+        in_spec_hash = ReproducibleHash(hashable)
+
+        # Now update with the hashes of the actual input files
+        hasher = hashlib.sha1(in_spec_hash)
+        def filehash(path):
+            BLOCKSIZE = 65536
+            with open(path, 'rb') as afile:
+                buf = afile.read(BLOCKSIZE)
+                while len(buf) > 0:
+                    hasher.update(buf)
+                    buf = afile.read(BLOCKSIZE)
+                    
+        for input_item in input_spec:
+            input_item.apply(filehash)
+        # Input name is the digest
+        job_input_container = hasher.hexdigest()
+        self.info('Input container:', job_input_container)
+        
+        if self.blob_service.exists(job_input_container):
+            self.debug('Container exists ')
+            in_cont = self.blob_service.get_container(job_input_container)
+            input_command_str = in_cont.to_str(job_input_container)
+        else:
+            self.debug('Creating input container', job_input_container)
+            in_cont = self.blob_service.create_container(job_input_container, fail_on_exist=True)
+            
+            def upld(path):
+                base = os.path.basename(path)
+                url = in_cont.url(base)
+                self.debug('Uploading {} -> {}'.format(path, url))
+                in_cont.upload(path)
+                return "curl '{}?{{input_container_sas}}' > {}\n".format(url, path)
+            
+            input_commands = []
+            for input_item in input_spec:
+                input_commands += input_item.apply(upld)
+            input_command_str = '\n'.join(input_commands)
+
+            # Azure metadata is sent in HTTP heads so escaping it is a
+            # nightmare. Just store in a blob with same name at the
+            # container
+            in_cont.from_str(job_input_container, input_command_str)
+            pass
+        
         in_sas = in_cont.generate_sas(ContainerPermissions.READ)
-        in_uploader = Uploader(in_cont, in_sas, verbosity=self.verbosity-1)
-        
-        self.debug('Create output container', job_output_container)
-        out_cont = self.blob_service.create_container(job_output_container)
-        out_sas = out_cont.generate_sas(ContainerPermissions.WRITE)
-        out_cont_url = 'https://{}/{}'.format(self.blob_service.primary_endpoint, job_output_container)
-        
-        return in_uploader, (out_cont_url, out_sas)
+        return input_command_str.format(input_container_sas=in_sas)
     pass
 
 if __name__ == "__main__":
@@ -283,4 +212,5 @@ if __name__ == "__main__":
     verbosity = args.verbose - args.quiet + 1
 
     jc = JobCreator(args.resource_group, args.batch_account, verbosity=verbosity)
+    
     jc(args.pool_name, args.nodes, args.jobspec)

@@ -99,6 +99,35 @@ class Auth(object):
         return GraphRbacManagementClient(self.GetCredentialsForResource('https://graph.windows.net/'), self.tenant_id)
     pass
 
+def DemangleId(az_id):
+    """Unpack an Azure ID string, at least partially.
+    """
+    parts = az_id.split('/')
+    
+    p = parts.pop(0)
+    assert p == ''
+
+    ans = {}
+    
+    p = parts.pop(0)
+    assert p == 'subscriptions'
+    ans['subscription'] = parts.pop(0)
+
+    p = parts.pop(0)
+    assert p == 'resourceGroups'
+    ans['resourceGroup'] = parts.pop(0)
+    
+    if len(parts):
+        p = parts.pop(0)
+        assert p == 'providers'
+        ans['provider'] = parts.pop(0)
+        ans['resource'] = parts.pop(0)
+        ans['name'] = parts.pop(0)
+
+        if len(parts):
+            ans['subparts'] = parts
+    return ans
+
 
 class StorageAccount(object):
     """Minimal wrapper of a storage account"""
@@ -197,7 +226,7 @@ class BlobContainer(object):
         return self.url(blob_name)
 
     def to_str(self, blob_name):
-        blb = self.blob.service.get_blob_to_text(self.name, blob_name)
+        blb = self.blob_service.get_blob_to_text(self.name, blob_name)
         return blb.content
     
     def delete(self, blob_name):
@@ -221,13 +250,13 @@ class BlobContainer(object):
     def url(self, blob_name, sas_token=None):
         return self.blob_service.make_blob_url(self.name, blob_name, sas_token=sas_token)
 
-    def generate_sas(self, permissions):
+    def generate_sas(self, permissions, hours=24):
         return self.blob_service.generate_container_shared_access_signature(
             self.name,
             permission=permissions,
-            expiry=datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+            expiry=datetime.datetime.utcnow() + datetime.timedelta(hours=hours)
             )
-        
+    
     def __iter__(self):
         return iter(self.blob_service.list_blobs(self.name))
     

@@ -47,7 +47,7 @@
 		"name": {"type": "string"},
 		"redirect": {"type": "boolean"}
 	    },
-	    "required": ["type"]
+	    "required": ["type", "redirect"]
 	},
 
 	"serialcommand": {
