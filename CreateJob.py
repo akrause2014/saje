@@ -1,59 +1,32 @@
 from __future__ import print_function
 import os.path
-import re
 import hashlib
 import uuid
 
 from azure.storage.blob.models import ContainerPermissions
 import azure.batch as batch
 
-from . import AzHelp
-from .status import StatusReporter
-from .CreatePool import PoolCreator
 from . import resources
-from .JobSpec import JobSpec, ReproducibleHash
+from .JobSpec import JobSpec
+from .BatchHelp import UsesBatchAccount
+from .PrepareInput import InputPrepper
 
-
-class JobCreator(StatusReporter):
+class JobCreator(UsesBatchAccount):
     node_size = 16
     task_id = 'task'
-    
+
     def __init__(self, group_name, batch_name, verbosity=1):
-        self.verbosity = verbosity
-        
-        self.auth = AzHelp.Auth('polnetbatchtest')
-        
-        self.group_name = group_name
-        self.batch_name = batch_name
-
-        self.debug('Getting batch account info')
-        batch_manager = self.auth.BatchManagementClient()
-        self.batch_account = batch_manager.batch_account.get(self.group_name, self.batch_name)
-        
-        batch_url = self.batch_account.account_endpoint
-        if not batch_url.startswith('https://'):
-            batch_url = 'https://' + batch_url
-        self.debug('Batch URL:', batch_url)
-        self.batch_url = batch_url
-
-        storage_id = self.batch_account.auto_storage.storage_account_id
-        storage_name = AzHelp.DemangleId(storage_id)['name']
-        
-        self.debug('Opening storage account', storage_name)
-        storage = AzHelp.StorageAccount.open(self.auth, self.group_name, storage_name)
-        self.blob_service = storage.BlockBlobService
-        
-        self.debug('Creating batch client')
-        self.batch_client = self.auth.BatchServiceClient(base_url=batch_url)
+        super(JobCreator, self).__init__(group_name, batch_name, verbosity=verbosity)
+        self.input_prep = InputPrepper(group_name, batch_name, verbosity=verbosity)
         return
-
+    
     def __call__(self, pool_name, requested_nodes, job_spec_file):
         job = JobSpec.open(job_spec_file)
         
         job_id = uuid.uuid4()
         self.info('Job ID:', job_id)
         
-        input_command_str = self._PrepareInput(job.inputs)
+        input_command_str = self.input_prep(job.inputs)
         pool, n_nodes = self._PoolSetup(pool_name, requested_nodes)
 
         job_output_container = str(job_id)
@@ -134,56 +107,6 @@ class JobCreator(StatusReporter):
         
         return pool, n_nodes
 
-    def _PrepareInput(self, input_spec):
-        # Generate a unique name that depends on the input
-        hashable = [i.ToJson() for i in input_spec]
-        # Start with the SHA1 of the input specification
-        in_spec_hash = ReproducibleHash(hashable)
-
-        # Now update with the hashes of the actual input files
-        hasher = hashlib.sha1(in_spec_hash)
-        def filehash(path):
-            BLOCKSIZE = 65536
-            with open(path, 'rb') as afile:
-                buf = afile.read(BLOCKSIZE)
-                while len(buf) > 0:
-                    hasher.update(buf)
-                    buf = afile.read(BLOCKSIZE)
-                    
-        for input_item in input_spec:
-            input_item.apply(filehash)
-        # Input name is the digest
-        job_input_container = hasher.hexdigest()
-        self.info('Input container:', job_input_container)
-        
-        if self.blob_service.exists(job_input_container):
-            self.debug('Container exists ')
-            in_cont = self.blob_service.get_container(job_input_container)
-            input_command_str = in_cont.to_str(job_input_container)
-        else:
-            self.debug('Creating input container', job_input_container)
-            in_cont = self.blob_service.create_container(job_input_container, fail_on_exist=True)
-            
-            def upld(path):
-                base = os.path.basename(path)
-                url = in_cont.url(base)
-                self.debug('Uploading {} -> {}'.format(path, url))
-                in_cont.upload(path)
-                return "curl '{}?{{input_container_sas}}' > {}\n".format(url, path)
-            
-            input_commands = []
-            for input_item in input_spec:
-                input_commands += input_item.apply(upld)
-            input_command_str = '\n'.join(input_commands)
-
-            # Azure metadata is sent in HTTP heads so escaping it is a
-            # nightmare. Just store in a blob with same name at the
-            # container
-            in_cont.from_str(job_input_container, input_command_str)
-            pass
-        
-        in_sas = in_cont.generate_sas(ContainerPermissions.READ)
-        return input_command_str.format(input_container_sas=in_sas)
     pass
 
 if __name__ == "__main__":
