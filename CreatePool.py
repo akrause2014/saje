@@ -16,7 +16,7 @@ class PoolStartWaiter(object):
     def test(self):
         p = self.client.pool.get(self.pool_id)
         if p.resize_errors is not None:
-            raise RuntimeError('resize error encountered for pool {}:\n{}'.format(p.id, resize_errors))
+            raise RuntimeError('resize error encountered for pool {}:\n{}'.format(p.id, p.resize_errors))
         nodes = list(self.client.compute_node.list(p.id))
         if len(nodes) < p.target_dedicated_nodes:
             return False
