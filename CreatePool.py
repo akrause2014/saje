@@ -3,6 +3,7 @@ import azure.batch.models as batchmodels
 
 from .status import StatusReporter
 from . import AzHelp
+from .BatchHelp import BatchHelper
 
 class PoolStartWaiter(object):
     def __init__(self, client, pool_id):
@@ -31,17 +32,11 @@ class PoolCreator(StatusReporter):
     # This MUST match the VHD's OS
     AGENT_SKU_ID = 'batch.node.centos 7'
     
-    def __init__(self, group_name, batch_name, vhd_url, vm_size='Standard_H16r'):
-        self.account_name = batch_name
-        self.auth = AzHelp.Auth('polnetbatchtest')
-        batch_manager = AzHelp.Auth().BatchManagementClient()
-        self.account = batch_manager.batch_account.get(group_name, batch_name)
+    def __init__(self, group_name, batch_name, vhd_url, vm_size='Standard_H16r', verbosity=1):
+        self.verbosity = verbosity
         
-        batch_url = self.account.account_endpoint
-        if not batch_url.startswith('https://'):
-            batch_url = 'https://' + batch_url
-            
-        self.client = self.auth.BatchServiceClient(base_url=batch_url)
+        self.account_name = batch_name
+        self.batch = BatchHelper(group_name, batch_name, verbosity=verbosity-1)
         
         self.vhd_url = vhd_url
         self.vm_size = vm_size
@@ -58,8 +53,8 @@ class PoolCreator(StatusReporter):
                                                  enable_auto_scale=False,
                                                  enable_inter_node_communication=True,
                                                  max_tasks_per_node=1)
-        self.client.pool.add(pool_conf)
-        return PoolStartWaiter(self.client, pool_name)
+        self.batch.client.pool.add(pool_conf)
+        return PoolStartWaiter(self.batch.client, pool_name)
     
     pass
 

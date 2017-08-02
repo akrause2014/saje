@@ -67,32 +67,32 @@ def JobContainerName(job_id):
     # truncated ID, followed by a hyphen, followed by the hash.
     return 'job-' + c_name +'-' + sha1
 
-
-class UsesBatchAccount(StatusReporter):
+class BatchHelper(StatusReporter):
     def __init__(self, group_name, batch_name, verbosity=1):
         self.verbosity = verbosity
         
         self.auth = AzHelp.Auth('polnetbatchtest')
         
-        self.group_name = group_name
-        self.batch_name = batch_name
+        self.group = group_name
+        self.name = batch_name
 
         self.debug('Getting batch account info')
-        batch_manager = self.auth.BatchManagementClient()
-        self.batch_account = batch_manager.batch_account.get(self.group_name, self.batch_name)
+        self.manager = self.auth.BatchManagementClient()
+        self.account = self.manager.batch_account.get(self.group, self.name)
         
-        batch_url = self.batch_account.account_endpoint
+        batch_url = self.account.account_endpoint
         if not batch_url.startswith('https://'):
             batch_url = 'https://' + batch_url
         self.debug('Batch URL:', batch_url)
-        self.batch_url = batch_url
+        self.url = batch_url
 
-        storage_id = self.batch_account.auto_storage.storage_account_id
+        storage_id = self.account.auto_storage.storage_account_id
         storage_name = AzHelp.DemangleId(storage_id)['name']
         
         self.debug('Opening storage account', storage_name)
-        storage = AzHelp.StorageAccount.open(self.auth, self.group_name, storage_name)
-        self.blob_service = storage.BlockBlobService
+        self.storage = AzHelp.StorageAccount.open(self.auth, self.group, storage_name)
         
         self.debug('Creating batch client')
-        self.batch_client = self.auth.BatchServiceClient(base_url=batch_url)
+        self.client = self.auth.BatchServiceClient(base_url=batch_url)
+    
+        

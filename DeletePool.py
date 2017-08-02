@@ -3,49 +3,19 @@ import azure.batch.models as batchmodels
 
 from .status import StatusReporter
 from . import AzHelp
+from .BatchHelp import BatchHelper
 
-class PoolStartWaiter(object):
-    def __init__(self, client, pool_id):
-        self.client = client
-        self.pool_id = pool_id
-        self.target_states = set((batchmodels.ComputeNodeState.idle,))
-        
-        return
-
-    def test(self):
-        p = self.client.pool.get(self.pool_id)
-        if p.resize_errors is not None:
-            raise RuntimeError('resize error encountered for pool {}:\n{}'.format(p.id, resize_errors))
-        nodes = list(self.client.compute_node.list(p.id))
-        if len(nodes) < p.target_dedicated_nodes:
-            return False
-        
-        return all(node.state in self.target_states for node in nodes)
-        
-    def wait(self):
-        while not self.test():
-            time.sleep(5)
-        return
-    
 class PoolDeleter(StatusReporter):
     # This MUST match the VHD's OS
     AGENT_SKU_ID = 'batch.node.centos 7'
     
     def __init__(self, verbosity=1):
         self.verbosity = verbosity
-        
+                
     def __call__(self, group_name, batch_name, pool_name):
-        auth = AzHelp.Auth('polnetbatchtest')
-        batch_manager = auth.BatchManagementClient()
-        account = batch_manager.batch_account.get(group_name, batch_name)
-        
-        batch_url = account.account_endpoint
-        if not batch_url.startswith('https://'):
-            batch_url = 'https://' + batch_url
-            
-        client = auth.BatchServiceClient(base_url=batch_url)
+        batch = BatchHelper(group_name, batch_name, verbosity=self.verbosity-1)
         self.info("Starting delete of pool", pool_name)
-        client.pool.delete(pool_name)
+        batch.client.pool.delete(pool_name)
     
     pass
 

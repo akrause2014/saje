@@ -69,8 +69,8 @@ class ImageCreator(StatusReporter):
         self.info("Creating temporary storage account", self.working_storage_account_name)
         acc = AzHelp.StorageAccount.create(self.auth, self.location, self.working_group_name, self.working_storage_account_name,
                                            'BlobStorage', 'Standard_LRS', 'Hot')
-        container = acc.BlockBlobService.create_container('provisioning-data',
-                                                          public=AzHelp.blob.PublicAccess.Container)
+        container = acc.block_blob_service.create_container('provisioning-data',
+                                                            public=AzHelp.blob.PublicAccess.Container)
         self.info("Uploading files")
         def upld(path):
             base = os.path.basename(path)

@@ -8,16 +8,18 @@ import azure.batch as batch
 
 from . import resources
 from .JobSpec import JobSpec
-from .BatchHelp import UsesBatchAccount
+from .BatchHelp import BatchHelper
+from .status import StatusReporter
 from .PrepareInput import InputPrepper
 
-class JobCreator(UsesBatchAccount):
+class JobCreator(StatusReporter):
     node_size = 16
     task_id = 'task'
 
     def __init__(self, group_name, batch_name, verbosity=1):
-        super(JobCreator, self).__init__(group_name, batch_name, verbosity=verbosity)
-        self.input_prep = InputPrepper(group_name, batch_name, verbosity=verbosity)
+        self.verbosity = verbosity
+        self.batch = BatchHelper(group_name, batch_name, verbosity=verbosity-1)
+        self.input_prep = InputPrepper(group_name, batch_name, verbosity=verbosity-1)
         return
     
     def __call__(self, pool_name, requested_nodes, job_spec_file):
@@ -31,9 +33,10 @@ class JobCreator(UsesBatchAccount):
 
         job_output_container = str(job_id)
         self.info('Output container:', job_output_container)
-        out_cont = self.blob_service.create_container(job_output_container)
+        blob_service = self.batch.storage.block_blob_service
+        out_cont = blob_service.create_container(job_output_container)
         out_sas = out_cont.generate_sas(ContainerPermissions.WRITE | ContainerPermissions.READ)
-        out_cont_url = 'https://{}/{}'.format(self.blob_service.primary_endpoint, job_output_container)
+        out_cont_url = 'https://{}/{}'.format(blob_service.primary_endpoint, job_output_container)
         
         self.debug('Processing job spec')
         exec_commands = []
@@ -78,7 +81,7 @@ class JobCreator(UsesBatchAccount):
         pool_info = batch.models.PoolInformation(pool_name)
         job_param = batch.models.JobAddParameter(id=job_id, pool_info=pool_info, display_name=job.name)
         
-        self.batch_client.job.add(job_param)
+        self.batch.client.job.add(job_param)
         sudoer =  batch.models.UserIdentity(auto_user=batch.models.AutoUserSpecification(elevation_level='admin'))
         mpi = batch.models.MultiInstanceSettings(n_nodes,
                                                  coordination_command_line="../coordination.sh",
@@ -89,15 +92,15 @@ class JobCreator(UsesBatchAccount):
                                                    command_line='sudo -u _azbatch ./run.sh',
                                                    multi_instance_settings=mpi,
                                                    user_identity=sudoer)
-        self.batch_client.task.add(job_id, task_param)
+        self.batch.client.task.add(job_id, task_param)
         # Set the job to finish once the task is done
-        self.batch_client.job.patch(job_id, batch.models.JobPatchParameter(on_all_tasks_complete='terminateJob'))
+        self.batch.client.job.patch(job_id, batch.models.JobPatchParameter(on_all_tasks_complete='terminateJob'))
         
         return str(job_id)
         
     def _PoolSetup(self, pool_name, requested_nodes):
-        self.info('Requesting {} node(s) from pool {}/{}'.format(requested_nodes if requested_nodes > 0 else 'all', self.batch_url, pool_name))
-        pool = self.batch_client.pool.get(pool_name)
+        self.info('Requesting {} node(s) from pool {}/{}'.format(requested_nodes if requested_nodes > 0 else 'all', self.batch.url, pool_name))
+        pool = self.batch.client.pool.get(pool_name)
         size = pool.current_dedicated_nodes
         
         n_nodes = requested_nodes if requested_nodes else size

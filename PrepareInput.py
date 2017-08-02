@@ -5,9 +5,16 @@ import hashlib
 from azure.storage.blob.models import ContainerPermissions
 
 from .JobSpec import ReproducibleHash    
-from .BatchHelp import UsesBatchAccount
+from .status import StatusReporter
+from .BatchHelp import BatchHelper
 
-class InputPrepper(UsesBatchAccount):
+class InputPrepper(StatusReporter):
+    def __init__(self, group_name, batch_name, verbosity=1):
+        self.verbosity = verbosity
+        self.batch = BatchHelper(group_name, batch_name, verbosity=verbosity-1)
+        self.blob_service = self.batch.storage.block_blob_service
+        return
+    
     @staticmethod
     def ComputeHash(input_spec):
         """Generate a unique name that depends on the input

@@ -46,7 +46,7 @@ class ImageTester(StatusReporter):
         self.info("Creating working storage account", self.working_storage_account_name)
         acc = AzHelp.StorageAccount.create(self.auth, self.location, self.working_group_name, self.working_storage_account_name,
                                            'Storage', 'Standard_LRS')
-        container = acc.BlockBlobService.create_container('vhds', fail_on_exist=False)
+        container = acc.block_blob_service.create_container('vhds', fail_on_exist=False)
         
         self.info("Copying VHD")
         try:
@@ -74,7 +74,7 @@ class ImageTester(StatusReporter):
             src_group_name = match.group(2)
 
             acc = AzHelp.StorageAccount.open(self.auth, src_group_name, src_account_name)
-            blobber = acc.PageBlobService
+            blobber = acc.page_blob_service
             cont = blobber.get_container(src_container_name)
             sas_token = cont.generate_sas(ContainerPermissions.READ)
             vhd_url += '?' + sas_token

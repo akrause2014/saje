@@ -167,11 +167,11 @@ class StorageAccount(object):
             raise AttributeError("Neither AzHelp.StorageAccount nor its delegate azure.mgmt.storage.StorageAccount have the attribute ''{}".format(name) )
     @property
     @cache
-    def BlockBlobService(self):
+    def block_blob_service(self):
         return BlobService(blob.BlockBlobService(account_name=self.acc.name, account_key=self.key))
     @property
     @cache
-    def PageBlobService(self):
+    def page_blob_service(self):
         return BlobService(blob.PageBlobService(account_name=self.acc.name, account_key=self.key))
 
 class BlobService(object):
