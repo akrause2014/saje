@@ -27,7 +27,7 @@ if __name__ == "__main__":
                         help="Azure data centre to use")
     parser.add_argument("--resource-group", "-g", required=True,
                         help="Name of resource group to put stuff in (required)")
-    parser.add_argument("--batch-account-name", "-n", required=True,
+    parser.add_argument("--batch-account-name", "-b", required=True,
                             help="Name of the batch account")
     args = parser.parse_args()
     verbosity = args.verbose - args.quiet + 1
