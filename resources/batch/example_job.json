@@ -1,0 +1,39 @@
+{
+    "name": "test",
+    "inputs": [
+	{
+	    "type": "file",
+	    "path": "config.xml"
+	},
+	{
+	    "type": "file",
+	    "path": "bifurcation-50ummm.gmy"
+	}	
+    ],
+    "commands": [
+	{
+	    "type": "serial",
+	    "expression": "ls > listing.txt",
+	    "redirect": false
+	},
+	{
+	    "type": "parallel",
+	    "expression": "hemelb -in config.xml",
+	    "redirect": true
+	}
+    ],
+    "outputs": [
+	{
+	    "type": "file",
+	    "path": "results/report.txt"
+	},
+	{
+	    "type": "file",
+	    "path": "results/report.xml"
+	},
+	{
+	    "type": "pattern",
+	    "pattern": "results/Extracted/*.xtr"
+	}
+    ]
+}
