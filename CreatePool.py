@@ -1,22 +1,24 @@
+from __future__ import print_function
 import time
 import azure.batch.models as batchmodels
+import os
 
 from .status import StatusReporter
 from . import AzHelp
 from .BatchHelp import BatchHelper
 
 class PoolStartWaiter(object):
-    def __init__(self, client, pool_id):
+    def __init__(self, client, pool_id, user_params=None):
         self.client = client
         self.pool_id = pool_id
         self.target_states = set((batchmodels.ComputeNodeState.idle,))
-        
+        self.user_params = user_params
         return
 
     def test(self):
         p = self.client.pool.get(self.pool_id)
         if p.resize_errors is not None:
-            raise RuntimeError('resize error encountered for pool {}:\n{}'.format(p.id, p.resize_errors))
+            raise RuntimeError('resize error encountered for pool {}:\n{}'.format(p.id, p.resize_errors[0]))
         nodes = list(self.client.compute_node.list(p.id))
         if len(nodes) < p.target_dedicated_nodes:
             return False
@@ -27,7 +29,21 @@ class PoolStartWaiter(object):
         while not self.test():
             time.sleep(5)
         return
-    
+
+    def print_connection_info(self):
+        if not self.user_params:
+            return
+        
+        if self.test():
+            nodes = list(self.client.compute_node.list(self.pool_id))
+            login = self.client.compute_node.get_remote_login_settings(self.pool_id, nodes[0].id)
+            self.user_params['ip_addr'] = login.remote_login_ip_address
+            self.user_params['port'] = login.remote_login_port
+            print('ssh -p {port} {username}@{ip_addr}\nPW: {password}'.format(**self.user_params))
+        else:
+            print('username:', self.user_params['username'])
+            print('password:', self.user_params['password'])
+
 class PoolCreator(StatusReporter):
     # This MUST match the VHD's OS
     AGENT_SKU_ID = 'batch.node.centos 7'
@@ -45,16 +61,33 @@ class PoolCreator(StatusReporter):
         self.vm_conf = batchmodels.VirtualMachineConfiguration(os_disk=self.os_disk,
                                                                node_agent_sku_id=self.AGENT_SKU_ID)
         
-    def __call__(self, pool_name, n_nodes):
+    def __call__(self, pool_name, n_nodes, create_user=False):
+        users = []
+        user_params = {}
+        if create_user:
+            self.info('Configuring SSH access')
+            username = os.getlogin()
+            pw = AzHelp.GenPw()
+            user = batchmodels.UserAccount(name=username,
+                                           password=pw,
+                                           elevation_level="admin")
+            users.append(user)
+            user_params['username'] = username
+            user_params['password'] = pw
+            pass
+
+        self.info('Configuring pool params')
         pool_conf = batchmodels.PoolAddParameter(id=pool_name,
                                                  vm_size=self.vm_size,
                                                  virtual_machine_configuration=self.vm_conf,
                                                  target_dedicated_nodes=n_nodes,
                                                  enable_auto_scale=False,
                                                  enable_inter_node_communication=True,
-                                                 max_tasks_per_node=1)
+                                                 max_tasks_per_node=1,
+                                                 user_accounts=users)
+        self.info('Creating pool', pool_name)
         self.batch.client.pool.add(pool_conf)
-        return PoolStartWaiter(self.batch.client, pool_name)
+        return PoolStartWaiter(self.batch.client, pool_name, user_params)
     
     pass
 
@@ -82,13 +115,16 @@ if __name__ == "__main__":
 
     parser.add_argument("--no-wait", action="store_true",
                         help="Do not wait for the pool to provision and boot")
-    
+
+    parser.add_argument("--create-user", "-c", action="store_true",
+                        help="Whether to create a user")
     args = parser.parse_args()
     verbosity = args.verbose - args.quiet + 1
 
     
     pc = PoolCreator(args.resource_group, args.batch_account, args.image_url)
-    waiter = pc(args.pool_name, args.nodes)
+    waiter = pc(args.pool_name, args.nodes, args.create_user)
     if not args.no_wait:
         waiter.wait()
         
+    waiter.print_connection_info()

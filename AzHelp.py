@@ -3,6 +3,8 @@ import json
 import datetime
 import time
 import operator
+import string
+import random
 
 import adal
 from msrestazure.azure_active_directory import AdalAuthentication
@@ -295,3 +297,27 @@ class Deployer(StatusReporter):
         return deployment_async_operation.result()
     pass
 
+def GenPw():
+    pool = string.ascii_letters + string.digits
+    pw_len = 12
+    def ok(pw):
+        have_up = False
+        have_lo = False
+        have_nu = False
+        for char in pw:
+            if char in string.ascii_lowercase:
+                have_lo = True
+            elif char in string.ascii_uppercase:
+                have_up = True
+            elif char in string.digits:
+                have_nu = True
+                pass
+            continue
+        
+        return have_up and have_lo and have_nu
+    
+    potential = ''
+    while not ok(potential):
+        potential = ''.join(random.choice(pool) for i in xrange(pw_len))
+    
+    return potential
