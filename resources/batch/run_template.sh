@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Script for job {job_id}
 
-# Read the Batch env vars that were saved by the coordination script
-. az_batch_env.txt
+num_nodes={num_nodes}
+num_cores={num_cores}
+cores_per_node={cores_per_node}
 
 # Set up MPI because the PATH etc isn't passed through by sudo
 . /opt/intel/impi/2017.2.174/intel64/bin/mpivars.sh
@@ -13,10 +14,13 @@ export I_MPI_FABRICS=shm:dapl
 export I_MPI_DAPL_PROVIDER=ofa-v2-ib0
 export I_MPI_DYNAMIC_CONNECTION=0
 
-cd $AZ_BATCH_TASK_SHARED_DIR/share
-
-num_cores={num_cores}
-cores_per_node={cores_per_node}
+if [[ $num_nodes == 1 ]]; then
+    export AZ_BATCH_HOST_LIST=localhost
+else
+    # Read the Batch env vars that were saved by the coordination script
+    . az_batch_env.txt
+    cd $AZ_BATCH_TASK_SHARED_DIR/share
+fi
 
 function upld {{
     timestamp=$(TZ=GMT date '+%a, %d %h %Y %H:%M:%S %Z')

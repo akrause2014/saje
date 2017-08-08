@@ -57,7 +57,8 @@ class JobCreator(StatusReporter):
             input=input_command_str,
             commands='\n'.join(exec_commands),
             output='\n'.join(output_commands),
-            
+
+            num_nodes=n_nodes,
             num_cores=self.node_size*n_nodes,
             cores_per_node=self.node_size,
             
@@ -78,21 +79,34 @@ class JobCreator(StatusReporter):
         coord_resource = batch.models.ResourceFile(coord_url, coord)
 
         self.info('Submitting job')
-        pool_info = batch.models.PoolInformation(pool_name)
-        job_param = batch.models.JobAddParameter(id=job_id, pool_info=pool_info, display_name=job.name)
-        
-        self.batch.client.job.add(job_param)
         sudoer =  batch.models.UserIdentity(auto_user=batch.models.AutoUserSpecification(elevation_level='admin'))
-        mpi = batch.models.MultiInstanceSettings(n_nodes,
-                                                 coordination_command_line="../coordination.sh",
-                                                 common_resource_files=[coord_resource])
+        pool_info = batch.models.PoolInformation(pool_name)
         
+        if n_nodes == 1:
+            job_prep_task = None
+            job_rel_task = None
+            mpi = None
+        else:
+            job_prep_task = batch.models.JobPreparationTask(command_line='echo "Job prep required by API but not needed here"')
+            job_rel_task = batch.models.JobReleaseTask(command_line='sh ../../uncoordinate.sh',
+                                                       user_identity=sudoer)
+            mpi = batch.models.MultiInstanceSettings(n_nodes,
+                                                     coordination_command_line="sh ../coordination.sh > coord_out.txt 2> coord_err.txt",
+                                                     common_resource_files=[coord_resource])
+            pass
+        
+        job_param = batch.models.JobAddParameter(id=job_id, pool_info=pool_info,
+                                                 display_name=job.name,
+                                                 job_preparation_task=job_prep_task,
+                                                 job_release_task=job_rel_task)
+        self.batch.client.job.add(job_param)
         task_param = batch.models.TaskAddParameter(id=self.task_id,
                                                    resource_files=[run_resource],
                                                    command_line='sudo -u _azbatch ./run.sh',
                                                    multi_instance_settings=mpi,
                                                    user_identity=sudoer)
         self.batch.client.task.add(job_id, task_param)
+        
         # Set the job to finish once the task is done
         self.batch.client.job.patch(job_id, batch.models.JobPatchParameter(on_all_tasks_complete='terminateJob'))
         
