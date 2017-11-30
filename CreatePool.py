@@ -56,10 +56,11 @@ class PoolCreator(StatusReporter):
         
         self.vhd_url = vhd_url
         self.vm_size = vm_size
-        self.os_disk = batchmodels.OSDisk(image_uris=[self.vhd_url],
-                                     caching='readOnly')
-        self.vm_conf = batchmodels.VirtualMachineConfiguration(os_disk=self.os_disk,
-                                                               node_agent_sku_id=self.AGENT_SKU_ID)
+        self.os_disk = batchmodels.OSDisk(caching='readOnly')
+        self.vm_conf = batchmodels.VirtualMachineConfiguration(
+            batchmodels.ImageReference(virtual_machine_image_id=self.vhd_url),
+            self.AGENT_SKU_ID,
+            os_disk=self.os_disk)
         
     def __call__(self, pool_name, n_nodes, create_user=False):
         users = []
