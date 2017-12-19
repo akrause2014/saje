@@ -38,10 +38,7 @@
             "type": "string",
 	    "defaultValue": "[concat(parameters('virtualMachineName'),'-ip')]"
         },
-	"sourceVhd": {
-	    "type": "string"
-	},
-	"runVhd": {
+	"sourceImage": {
 	    "type": "string"
 	}
     },
@@ -65,20 +62,19 @@
 		"hardwareProfile": {
 		    "vmSize": "[parameters('virtualMachineSize')]"
 		},
+		
 		"storageProfile": {
-		    "osDisk": {
-			"osType": "Linux",
-			"name": "osdiskfortest.vhd",
-			"createOption": "FromImage",
-			"image": {
-			    "uri": "[parameters('sourceVhd')]"
-			},
-			"vhd": {
-			    "uri": "[parameters('runVhd')]"
-			},
-			"caching": "ReadWrite"
-		    }
-		},
+                    "imageReference": {
+                        "id": "[parameters('sourceImage')]"
+                    },
+                    "osDisk": {
+                        "createOption": "fromImage",
+                        "managedDisk": {
+                            "storageAccountType": "Standard_LRS"
+                        }
+                    }
+                },
+
 		"osProfile": {
 		    "computerName": "[parameters('virtualMachineName')]",
 		    "adminUsername": "[parameters('adminUsername')]",
@@ -94,6 +90,7 @@
 			}
 		    }
 		},
+		
 		"networkProfile": {
                     "networkInterfaces": [
                         {
