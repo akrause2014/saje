@@ -48,18 +48,22 @@ class PoolCreator(StatusReporter):
     # This MUST match the VHD's OS
     AGENT_SKU_ID = 'batch.node.centos 7'
     
-    def __init__(self, group_name, batch_name, vhd_url, vm_size='Standard_H16r', verbosity=1):
+    def __init__(self, group_name, batch_name, image_id, vm_size='Standard_H16r', verbosity=1):
         self.verbosity = verbosity
         
         self.account_name = batch_name
         self.batch = BatchHelper(group_name, batch_name, verbosity=verbosity-1)
         
-        self.vhd_url = vhd_url
+        self.image_id = image_id
+        self.image_ref = batchmodels.ImageReference(
+            virtual_machine_image_id=image_id
+            )
         self.vm_size = vm_size
-        self.os_disk = batchmodels.OSDisk(image_uris=[self.vhd_url],
-                                     caching='readOnly')
-        self.vm_conf = batchmodels.VirtualMachineConfiguration(os_disk=self.os_disk,
-                                                               node_agent_sku_id=self.AGENT_SKU_ID)
+        self.vm_conf = batchmodels.VirtualMachineConfiguration(
+            image_reference=self.image_ref,
+            os_disk=batchmodels.OSDisk(caching='readOnly'),
+            node_agent_sku_id=self.AGENT_SKU_ID
+            )
         
     def __call__(self, pool_name, n_nodes, create_user=False):
         users = []
@@ -104,8 +108,8 @@ if __name__ == "__main__":
                         help="Name of resource group containing the batch account (required)")
     parser.add_argument("--batch-account", "-b", required=True,
                         help="Name of the batch account to create pool in (required)")
-    parser.add_argument("--image-url", "-i", required=True,
-                        help="URL of the VHD image to use")
+    parser.add_argument("--image-id", "-i", required=True,
+                        help="Resource ID of the image to use")
     
     parser.add_argument("--pool-name", "-p", required=True,
                         help="Name for the pool (required)")
@@ -122,7 +126,7 @@ if __name__ == "__main__":
     verbosity = args.verbose - args.quiet + 1
 
     
-    pc = PoolCreator(args.resource_group, args.batch_account, args.image_url)
+    pc = PoolCreator(args.resource_group, args.batch_account, args.image_id)
     waiter = pc(args.pool_name, args.nodes, args.create_user)
     if not args.no_wait:
         waiter.wait()

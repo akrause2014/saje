@@ -219,17 +219,17 @@ def ReproducibleHash(jsObj):
     if isinstance(jsObj, dict):
         keys = sorted(jsObj.keys())
         for k in keys:
-            sha1.update(k)
+            sha1.update(k.encode())
             hv = ReproducibleHash(jsObj[k])
             sha1.update(hv)
     elif isinstance(jsObj, list):
         for i in jsObj:
             sha1.update(ReproducibleHash(i))
-    elif isinstance(jsObj, (str, unicode)):
-        sha1.update(jsObj)
+    elif isinstance(jsObj, str):
+        sha1.update(jsObj.encode())
     elif isinstance(jsObj, (int, float, bool, type(None))):
         sha1.update(str(jsObj))
     else:
         raise TypeError("Type '{}' isn't in json model so don't know how to hash".format(type(jsObj)))
     
-    return sha1.hexdigest()
+    return sha1.digest()

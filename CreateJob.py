@@ -90,7 +90,7 @@ class JobCreator(StatusReporter):
             job_prep_task = batch.models.JobPreparationTask(command_line='echo "Job prep required by API but not needed here"')
             job_rel_task = batch.models.JobReleaseTask(command_line='sh ../../uncoordinate.sh',
                                                        user_identity=sudoer)
-            mpi = batch.models.MultiInstanceSettings(n_nodes,
+            mpi = batch.models.MultiInstanceSettings(number_of_instances=n_nodes,
                                                      coordination_command_line="sh ../coordination.sh > coord_out.txt 2> coord_err.txt",
                                                      common_resource_files=[coord_resource])
             pass

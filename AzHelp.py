@@ -8,6 +8,7 @@ import random
 
 import adal
 from msrestazure.azure_active_directory import AdalAuthentication
+from msrestazure.azure_exceptions import CloudError
 
 from azure.mgmt.resource import ResourceManagementClient
 from azure.mgmt.resource.resources.models import DeploymentMode
@@ -15,6 +16,7 @@ from azure.mgmt.resource.resources.models import DeploymentMode
 from azure.mgmt.storage import StorageManagementClient
 from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.batch import BatchManagementClient
+from azure.mgmt.network import NetworkManagementClient
 from azure.mgmt.keyvault import KeyVaultManagementClient
 from azure.mgmt.storage.models import StorageAccountCreateParameters, Sku, Kind
 from azure.mgmt.authorization import AuthorizationManagementClient
@@ -88,7 +90,11 @@ class Auth(object):
         return BatchManagementClient(self.ManagementCredentials, self.subscription_id)
     def BatchServiceClient(self, base_url=None):
         return batch.BatchServiceClient(self.GetCredentialsForResource('https://batch.core.windows.net/'), base_url=base_url)
-   
+
+    @cache
+    def NetworkManagementClient(self):
+        return NetworkManagementClient(self.ManagementCredentials, self.subscription_id)
+    
     @cache
     def KeyVaultManagementClient(self):
         return KeyVaultManagementClient(self.ManagementCredentials, self.subscription_id)
@@ -133,6 +139,16 @@ def DemangleId(az_id):
 
 class StorageAccount(object):
     """Minimal wrapper of a storage account"""
+    
+    @staticmethod
+    def exists(auth, group_name, account_name):
+        client = auth.StorageManagementClient()
+        try:
+            acc = client.storage_accounts.get_properties(group_name, account_name)
+            return True
+        except CloudError:
+            return False
+        
     @classmethod
     def create(cls, auth, location, group_name, account_name, account_kind, account_type, access_tier=None):
         client = auth.StorageManagementClient()
@@ -318,6 +334,6 @@ def GenPw():
     
     potential = ''
     while not ok(potential):
-        potential = ''.join(random.choice(pool) for i in xrange(pw_len))
+        potential = ''.join(random.choice(pool) for i in range(pw_len))
     
     return potential

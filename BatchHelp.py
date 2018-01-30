@@ -71,7 +71,7 @@ class BatchHelper(StatusReporter):
     def __init__(self, group_name, batch_name, verbosity=1):
         self.verbosity = verbosity
         
-        self.auth = AzHelp.Auth('polnetbatchtest')
+        self.auth = AzHelp.Auth('polnet')
         
         self.group = group_name
         self.name = batch_name

@@ -39,7 +39,7 @@ class ImageCreator(StatusReporter):
         packer_vars.update(var_map)
 
         cmdline = ['packer', 'build', '-machine-readable']
-        for k,v in packer_vars.iteritems():
+        for k,v in packer_vars.items():
             cmdline.append('-var')
             cmdline.append('{}={}'.format(k, v))
             
