@@ -16,7 +16,7 @@ class JobChecker(StatusReporter):
         self.batch = BatchHelper(group_name, batch_name, verbosity=verbosity-1)
         self.job_id = job_id
 
-    def wait_for_completion(self, timeout_s=None):
+    def wait_for_completion(self, timeout_s=3600):
         t0 = time.time()
         tMax = t0 + timeout_s
         while self.get_state() != batch.models.JobState.completed:
