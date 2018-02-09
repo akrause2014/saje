@@ -11,6 +11,7 @@ from .JobSpec import JobSpec
 from .BatchHelp import BatchHelper
 from .status import StatusReporter
 from .PrepareInput import InputPrepper
+from .SubmittedJob import SubmittedJob
 
 class JobCreator(StatusReporter):
     node_size = 16
@@ -110,7 +111,7 @@ class JobCreator(StatusReporter):
         # Set the job to finish once the task is done
         self.batch.client.job.patch(job_id, batch.models.JobPatchParameter(on_all_tasks_complete='terminateJob'))
         
-        return str(job_id)
+        return SubmittedJob(self.batch.group, self.batch.name, str(job_id))
         
     def _PoolSetup(self, pool_name, requested_nodes):
         self.info('Requesting {} node(s) from pool {}/{}'.format(requested_nodes if requested_nodes > 0 else 'all', self.batch.url, pool_name))
