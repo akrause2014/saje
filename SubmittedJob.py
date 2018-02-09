@@ -26,7 +26,7 @@ class SubmittedJob(StatusReporter):
 
     def get_state(self):
         job_info = self.batch.client.job.get(self.job_id)
-           return job_info.state
+        return job_info.state
 
 
     def fetch_output(self, output_path):
