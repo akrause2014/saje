@@ -1,8 +1,9 @@
-from __future__ import print_function
+from __future__ import print_function, unicode_literals
 import json
 import jsonschema
 import glob
 import hashlib
+import six
 
 from . import resources
 
@@ -20,12 +21,12 @@ class Input(object):
         return child_cls.FromJson(data)
     
     def ToJson(self):
-        return {u'type': self.TAG}
+        return {'type': self.TAG}
 
     pass
 
 class InputFile(Input):
-    TAG = u'file'
+    TAG = 'file'
     @classmethod
     def FromJson(cls, data):
         ans = cls()
@@ -37,13 +38,13 @@ class InputFile(Input):
 
     def ToJson(self):
         ans = super(InputFile, self).ToJson()
-        ans[u'path'] = self.path
+        ans['path'] = self.path
         return ans
     
     pass
 
 class InputPattern(Input):
-    TAG = u'pattern'
+    TAG = 'pattern'
     @classmethod
     def FromJson(cls, data):
         ans = cls()
@@ -55,7 +56,7 @@ class InputPattern(Input):
     
     def ToJson(self):
         ans = super(InputPattern, self).ToJson()
-        ans[u'pattern'] = self.pattern
+        ans['pattern'] = self.pattern
         return ans
 
     pass
@@ -91,12 +92,12 @@ class Command(object):
         return cmds
     
     def ToJson(self):
-        return {u'type': self.TAG,
-                u'redirect': self.redirect}
+        return {'type': self.TAG,
+                'redirect': self.redirect}
     pass
 
 class SerialCommand(Command):
-    TAG = u'serial'
+    TAG = 'serial'
     PREFIX = ''
     @classmethod
     def FromJson(cls, data):
@@ -106,12 +107,12 @@ class SerialCommand(Command):
     
     def ToJson(self):
         ans = super(SerialCommand, self).ToJson()
-        ans[u'expression'] = self.expression
+        ans['expression'] = self.expression
         return ans
     pass
 
 class ParallelCommand(Command):
-    TAG = u'parallel'
+    TAG = 'parallel'
     PREFIX = 'mpirun -np $num_cores -ppn $cores_per_node -hosts $AZ_BATCH_HOST_LIST '
     @classmethod
     def FromJson(cls, data):
@@ -121,7 +122,7 @@ class ParallelCommand(Command):
     
     def ToJson(self):
         ans = super(ParallelCommand, self).ToJson()
-        ans[u'expression'] = self.expression
+        ans['expression'] = self.expression
         return ans
     pass
 
@@ -139,12 +140,12 @@ class Output(object):
         return child_cls.FromJson(data)
     
     def ToJson(self):
-        return {u'type': self.TAG}
+        return {'type': self.TAG}
     
     pass
 
 class OutputFile(Output):
-    TAG = u'file'
+    TAG = 'file'
     @classmethod
     def FromJson(cls, data):
         ans = cls()
@@ -156,13 +157,13 @@ class OutputFile(Output):
     
     def ToJson(self):
         ans = super(OutputFile, self).ToJson()
-        ans[u'path'] = self.path
+        ans['path'] = self.path
         return ans
     
     pass
 
 class OutputPattern(Output):
-    TAG = u'pattern'
+    TAG = 'pattern'
     @classmethod
     def FromJson(cls, data):
         ans = cls()
@@ -176,7 +177,7 @@ class OutputPattern(Output):
     
     def ToJson(self):
         ans = super(OutputPattern, self).ToJson()
-        ans[u'pattern'] = self.pattern
+        ans['pattern'] = self.pattern
         return ans
     
     pass
@@ -205,10 +206,10 @@ class JobSpec(object):
 
     def ToJson(self):
         ans = {}
-        ans[u'name'] = self.name
-        ans[u'inputs'] = [i.ToJson() for i in self.inputs]
-        ans[u'commands'] = [c.ToJson() for c in self.commands]
-        ans[u'outputs'] = [o.ToJson() for o in self.outputs]
+        ans['name'] = self.name
+        ans['inputs'] = [i.ToJson() for i in self.inputs]
+        ans['commands'] = [c.ToJson() for c in self.commands]
+        ans['outputs'] = [o.ToJson() for o in self.outputs]
         jsonschema.validate(ans, self.schema)
         return ans        
     pass
@@ -225,10 +226,10 @@ def ReproducibleHash(jsObj):
     elif isinstance(jsObj, list):
         for i in jsObj:
             sha1.update(ReproducibleHash(i))
-    elif isinstance(jsObj, str):
-        sha1.update(jsObj.encode())
+    elif isinstance(jsObj, six.string_types):
+        sha1.update(six.b(jsObj))
     elif isinstance(jsObj, (int, float, bool, type(None))):
-        sha1.update(str(jsObj))
+        sha1.update(ReproducibleHash(str(jsObj)))
     else:
         raise TypeError("Type '{}' isn't in json model so don't know how to hash".format(type(jsObj)))
     
