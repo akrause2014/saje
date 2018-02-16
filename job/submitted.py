@@ -1,4 +1,4 @@
-from __future__ import print_function
+from __future__ import print_function, unicode_literals
 import os.path
 import time
 
@@ -35,6 +35,11 @@ class SubmittedJob(StatusReporter):
         blob_service = self.batch.storage.block_blob_service
         out_cont = blob_service.get_container(self.job_id)
         for blb in out_cont.list():
-            out_cont.download(blb, os.path.join(output_path, blb))
+            # Make any necessary containing directories
+            out_fn = os.path.join(output_path, blb)
+            out_dir = os.path.dirname(out_fn)
+            if out_dir != '':
+                os.makedirs(out_dir)
+            out_cont.download(blb, out_fn)
         return
     pass
