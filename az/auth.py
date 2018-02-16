@@ -20,16 +20,18 @@ class Auth(object):
     ]
 }
 
-    Default location is ~/.azure/polnet.json
+    Default location is ~/.azure/saje.json but you can override by 
+    setting SAJE_AUTH_CONFIG in your environment or supply it to 
+    the constructor.
     '''
     
-    default_config = os.path.expanduser('~/.azure/polnet.json')
+    default_config = os.path.expanduser('~/.azure/saje.json')
     login_endpoint = 'https://login.microsoftonline.com/'
     
     def __init__(self, name='default', config_path=None):
         if config_path is None:
-            config_path = self.default_config
-
+            config_path = os.environ.get('SAJE_AUTH_CONFIG', self.default_config)
+            
         with open(config_path) as cf:
             config = json.load(cf)
             

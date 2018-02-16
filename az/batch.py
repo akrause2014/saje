@@ -66,7 +66,7 @@ def JobContainerName(job_id):
     return 'job-' + c_name +'-' + sha1
 
 class Helper(StatusReporter):
-    def __init__(self, group_name, batch_name, cred_name='polnet', verbosity=1):
+    def __init__(self, group_name, batch_name, cred_name='batch', verbosity=1):
         self.verbosity = verbosity
         
         self.auth = Auth(cred_name)

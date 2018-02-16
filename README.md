@@ -1,5 +1,6 @@
-# PolCloud
-Run PolNet in the cloud! 
+# SAJE: Simple Azure Job Environment
+Build RDMA MPI enabled images for the Azure cloud for your HPC
+application, then run jobs.
 
 ## Set up tasks
 
@@ -33,17 +34,28 @@ subscription to do this.
   not...).
   
 
-### AzHelp.Auth
-* Create an App user for your batch use. In the portal go to "App
-  registrations" then "new". Give it a name, the type is native and
-  sign on URI can be http://AnythingYouLikeThatIsAValidUri. Give it
-  access to Batch, by going to required permissions, add, 1) select
-  API "Microsoft Azure Batch", 2) select permissions "Access Batch"
-  requires admin = no. Generate a key with any name and duration you
-  like. COPY THE SECRET! You need it below.
-  
+### Authorisation
 
-* Create a configuration file for AzHelp.Auth in `~/.azure/polnet.json`
+SAJE splits tasks into two levels and you need to have appropriate
+credentials for the level of access you need.
+
+1. Administrative tasks such as creating images and Batch accounts
+
+I just use the credentials from the `az` CLI client but you can
+generate your own with a similar process as below.
+
+2. User tasks like creating pools and jobs
+
+Create an App user for your batch use. In the portal go to "App
+registrations" then "new". Give it a name, the type is native and sign
+on URI can be http://AnythingYouLikeThatIsAValidUri. Give it access to
+Batch, by going to required permissions, add, 1) select API "Microsoft
+Azure Batch", 2) select permissions "Access Batch" requires admin =
+no. Generate a key with any name and duration you like. COPY THE
+SECRET! You need it below.
+  
+You need to store these credentials in a JSON file
+`~/.azure/saje.json` with format like this:
 ```
 {
    "credentials" : [
@@ -70,25 +82,25 @@ subscription to do this.
 1. Setup tasks - cost tiny amounts and must be done with credentials
    that can create resource groups.
     1. Create the batch account and related infrastructure with
-	`polcloud.DeployBatch`
+	`saje.batch.deploy`
    
     2. Authorise your app to access the resource group you created as
 	a contributor (manual task in the portal at the moment - go to the
 	resource group, Access control, )
    
-    3. Create an image with `polcloud.ImageCreator`
+    3. Create an image with `saje.image.create`
     
     4. (Optionally) test that it works as intended with
-    `polcloud.ImageTester`
+    `saje.image.test`
     
 2. Run tasks - note that this costs money as long as the pool is
-   running! These can be done with the credentials
+   running!
 
-    5. Create a pool with `polcloud.CreatePool`
+    5. Create a pool with `saje.pool.create`
 	
-	6. Add one or more jobs with `polcloud.CreateJob`
+	6. Add one or more jobs with `saje.job.create`
 	
-	7. Delete the pool with `polcloud.DeletePool`
+	7. Delete the pool with `saje.pool.delete`
 
 
 
