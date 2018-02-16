@@ -1,17 +1,15 @@
-from __future__ import print_function
+from __future__ import print_function, unicode_literals
 import time
-import azure.batch.models as batchmodels
 import os
+from ..az import batch
 
-from .status import StatusReporter
-from . import AzHelp
-from .BatchHelp import BatchHelper
+from ..status import StatusReporter
 
 class PoolStartWaiter(object):
     def __init__(self, client, pool_id, user_params=None):
         self.client = client
         self.pool_id = pool_id
-        self.target_states = set((batchmodels.ComputeNodeState.idle,))
+        self.target_states = set((batch.models.ComputeNodeState.idle,))
         self.user_params = user_params
         return
 
@@ -44,6 +42,33 @@ class PoolStartWaiter(object):
             print('username:', self.user_params['username'])
             print('password:', self.user_params['password'])
 
+def GenPw():
+    '''Generate a random password that matches Azure's rules.
+    '''
+    pool = string.ascii_letters + string.digits
+    pw_len = 12
+    def ok(pw):
+        have_up = False
+        have_lo = False
+        have_nu = False
+        for char in pw:
+            if char in string.ascii_lowercase:
+                have_lo = True
+            elif char in string.ascii_uppercase:
+                have_up = True
+            elif char in string.digits:
+                have_nu = True
+                pass
+            continue
+        
+        return have_up and have_lo and have_nu
+    
+    potential = ''
+    while not ok(potential):
+        potential = ''.join(random.choice(pool) for i in range(pw_len))
+    
+    return potential
+
 class PoolCreator(StatusReporter):
     # This MUST match the VHD's OS
     AGENT_SKU_ID = 'batch.node.centos 7'
@@ -52,16 +77,16 @@ class PoolCreator(StatusReporter):
         self.verbosity = verbosity
         
         self.account_name = batch_name
-        self.batch = BatchHelper(group_name, batch_name, verbosity=verbosity-1)
+        self.batch = batch.Helper(group_name, batch_name, verbosity=verbosity-1)
         
         self.image_id = image_id
-        self.image_ref = batchmodels.ImageReference(
+        self.image_ref = batch.models.ImageReference(
             virtual_machine_image_id=image_id
             )
         self.vm_size = vm_size
-        self.vm_conf = batchmodels.VirtualMachineConfiguration(
+        self.vm_conf = batch.models.VirtualMachineConfiguration(
             image_reference=self.image_ref,
-            os_disk=batchmodels.OSDisk(caching='readOnly'),
+            os_disk=batch.models.OSDisk(caching='readOnly'),
             node_agent_sku_id=self.AGENT_SKU_ID
             )
         
@@ -71,24 +96,26 @@ class PoolCreator(StatusReporter):
         if create_user:
             self.info('Configuring SSH access')
             username = os.getlogin()
-            pw = AzHelp.GenPw()
-            user = batchmodels.UserAccount(name=username,
-                                           password=pw,
-                                           elevation_level="admin")
+            pw = GenPw()
+            user = batch.models.UserAccount(
+                name=username,
+                password=pw,
+                elevation_level="admin")
             users.append(user)
             user_params['username'] = username
             user_params['password'] = pw
             pass
 
         self.info('Configuring pool params')
-        pool_conf = batchmodels.PoolAddParameter(id=pool_name,
-                                                 vm_size=self.vm_size,
-                                                 virtual_machine_configuration=self.vm_conf,
-                                                 target_dedicated_nodes=n_nodes,
-                                                 enable_auto_scale=False,
-                                                 enable_inter_node_communication=True,
-                                                 max_tasks_per_node=1,
-                                                 user_accounts=users)
+        pool_conf = batch.models.PoolAddParameter(
+            id=pool_name,
+            vm_size=self.vm_size,
+            virtual_machine_configuration=self.vm_conf,
+            target_dedicated_nodes=n_nodes,
+            enable_auto_scale=False,
+            enable_inter_node_communication=True,
+            max_tasks_per_node=1,
+            user_accounts=users)
         self.info('Creating pool', pool_name)
         self.batch.client.pool.add(pool_conf)
         return PoolStartWaiter(self.batch.client, pool_name, user_params)

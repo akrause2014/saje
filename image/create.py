@@ -4,8 +4,8 @@ import os.path
 import time
 import subprocess
 
-from . import AzHelp
-from .status import StatusReporter
+from ..az.auth import Auth
+from ..status import StatusReporter
 
 class ImageCreator(StatusReporter):
     vm_size = 'Standard_H16r'
@@ -17,7 +17,7 @@ class ImageCreator(StatusReporter):
         self.output_group_name = out_grp_name
         self.output_image_name = out_img_name
         
-        self.auth = AzHelp.Auth()
+        self.auth = Auth()
         return
 
     

@@ -1,9 +1,5 @@
-import time
-import azure.batch.models as batchmodels
-
-from .status import StatusReporter
-from . import AzHelp
-from .BatchHelp import BatchHelper
+from ..status import StatusReporter
+from ..az.batch import BatchHelper
 
 class PoolDeleter(StatusReporter):
     # This MUST match the VHD's OS

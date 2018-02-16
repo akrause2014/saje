@@ -2,15 +2,15 @@ from __future__ import print_function
 import os.path
 import time
 
-import azure.batch as batch
+#import azure.batch as batch
 
-from .BatchHelp import BatchHelper
-from .status import StatusReporter
+from ..az import batch
+from ..status import StatusReporter
 
 class SubmittedJob(StatusReporter):
     def __init__(self, group_name, batch_name, job_id, verbosity=1):
         self.verbosity = verbosity
-        self.batch = BatchHelper(group_name, batch_name, verbosity=verbosity-1)
+        self.batch = batch.Helper(group_name, batch_name, verbosity=verbosity-1)
         self.job_id = job_id
 
     def wait_for_completion(self, timeout_s=3600):

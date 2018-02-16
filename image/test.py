@@ -3,12 +3,13 @@ from __future__ import print_function
 import os.path
 from haikunator import Haikunator
 
-from . import AzHelp
+from ..az.auth import Auth
+from ..az.deployer import Deployer
 import azure.common
 from azure.storage.blob.models import ContainerPermissions
 
-from .status import StatusReporter
-from . import resources
+from ..status import StatusReporter
+from .. import resources
 
 class ImageTester(StatusReporter):
     
@@ -26,7 +27,7 @@ class ImageTester(StatusReporter):
             dns = namer.haikunate()
         self.dns_label_prefix = dns
         
-        self.auth = AzHelp.Auth()
+        self.auth = Auth()
         return
 
     def create(self, image_id):
@@ -49,7 +50,7 @@ class ImageTester(StatusReporter):
             self.use_tmp_key = True
 
         self.info("Deploying VM")
-        self.deployer = AzHelp.Deployer(self.auth, self.working_group_name)
+        self.deployer = Deployer(self.auth, self.working_group_name, name='imgtest_'+Deployer.now_str())
         admin_user = os.getlogin()
         params = {
             'virtualMachineName': 'test',

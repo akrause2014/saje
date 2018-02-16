@@ -5,7 +5,7 @@ import glob
 import hashlib
 import six
 
-from . import resources
+from .. import resources
 
 class Input(object):
     _subtypes = None

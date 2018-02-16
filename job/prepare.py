@@ -1,17 +1,17 @@
-from __future__ import print_function
+from __future__ import print_function, unicode_literals
 import os.path
 import hashlib
 
 from azure.storage.blob.models import ContainerPermissions
 
-from .JobSpec import ReproducibleHash    
-from .status import StatusReporter
-from .BatchHelp import BatchHelper
+from .spec import ReproducibleHash    
+from ..status import StatusReporter
+from ..az import batch
 
 class InputPrepper(StatusReporter):
     def __init__(self, group_name, batch_name, verbosity=1):
         self.verbosity = verbosity
-        self.batch = BatchHelper(group_name, batch_name, verbosity=verbosity-1)
+        self.batch = batch.Helper(group_name, batch_name, verbosity=verbosity-1)
         self.blob_service = self.batch.storage.block_blob_service
         return
     

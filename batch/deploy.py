@@ -1,15 +1,16 @@
 #!/usr/bin/env python
-from . import AzHelp
-from .status import StatusReporter
-from . import resources
+from ..az.auth import Auth
+from ..az.deploy import Deployer
+from ..status import StatusReporter
+from .. import resources
 
 def DeployBatch(location, group_name, batch_acc_name):
-    auth = AzHelp.Auth()
+    auth = Auth()
     res_client = auth.ResourceManagementClient()
     res_client.resource_groups.create_or_update(
         group_name, {'location': location}
         )
-    dep = AzHelp.Deployer(auth, group_name)
+    dep = Deployer(auth, group_name)
     dep(resources.get('batch', 'batch_account.json'),
             {'batchAccountName': batch_acc_name})
     

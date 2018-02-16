@@ -2,16 +2,17 @@ import os.path
 from haikunator import Haikunator
 from azure.mgmt.compute import models as compute_models
 
-from . import AzHelp
-from .status import StatusReporter
-from . import resources
-from . import ssh
-import pdb
+from ..az.auth import Auth
+from ..az.storage import StorageAccount, blob
+from ..az.deployer import Deployer
+from ..status import StatusReporter
+from .. import resources
+from .. import ssh
 
 class Converter(StatusReporter):
     def __init__(self, loc, out_grp, out_name, wrk_grp=None, wrk_acc=None, wrk_vm=None, keep=False, vrb=1):
         
-        self.auth = AzHelp.Auth()
+        self.auth = Auth()
 
         self.admin_user_name = os.getlogin()
         
@@ -62,19 +63,19 @@ class Converter(StatusReporter):
             self.output_group_name, {'location': self.location}
             )
 
-        if AzHelp.StorageAccount.exists(
+        if StorageAccount.exists(
                 self.auth,
                 self.working_group_name, self.working_storage_account_name):
             self.info("Opening working storage account:",
                           self.working_storage_account_name)
-            acc = AzHelp.StorageAccount.open(
+            acc = StorageAccount.open(
                 self.auth,
                 self.working_group_name,
                 self.working_storage_account_name)
         else:
             self.info("Creating working storage account:",
                           self.working_storage_account_name)
-            acc = AzHelp.StorageAccount.create(
+            acc = StorageAccount.create(
                 self.auth,
                 self.location, self.working_group_name,
                 self.working_storage_account_name,
@@ -83,7 +84,7 @@ class Converter(StatusReporter):
         container = acc.block_blob_service.create_container(
             'rawimg',
             fail_on_exist=False,
-            public=AzHelp.blob.PublicAccess.Container
+            public=blob.PublicAccess.Container
             )
 
         if not container.exists('source.vhd'):
@@ -102,7 +103,7 @@ class Converter(StatusReporter):
 
     def _StartVhdVm(self):        
         self.info("Deploying VM:", self.vm_name)
-        self.deployer = AzHelp.Deployer(self.auth, self.working_group_name)
+        self.deployer = Deployer(self.auth, self.working_group_name)
         
         
         params = {
@@ -205,8 +206,6 @@ if __name__ == "__main__":
     verbosity = args.verbose - args.quiet + 1
     
     conv = Converter(args.location, args.resource_group, args.name, args.work_group, args.work_storage, args.work_vm, keep=args.keep, vrb=verbosity)
-    
-    source_url = 'https://msshared.blob.core.windows.net/platformimages/OpenLogic__OpenLogic-CentOS-71-HPC-20180123-en-us-30GB.vhd'
     
     conv(args.source_url)
     

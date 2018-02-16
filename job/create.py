@@ -4,14 +4,14 @@ import hashlib
 import uuid
 
 from azure.storage.blob.models import ContainerPermissions
-import azure.batch as batch
 
-from . import resources
-from .JobSpec import JobSpec
-from .BatchHelp import BatchHelper
-from .status import StatusReporter
-from .PrepareInput import InputPrepper
-from .SubmittedJob import SubmittedJob
+from .. import resources
+from ..az import batch
+
+from .spec import JobSpec
+from ..status import StatusReporter
+from .prepare import InputPrepper
+from .submitted import SubmittedJob
 
 class JobCreator(StatusReporter):
     node_size = 16
@@ -19,7 +19,7 @@ class JobCreator(StatusReporter):
 
     def __init__(self, group_name, batch_name, verbosity=1):
         self.verbosity = verbosity
-        self.batch = BatchHelper(group_name, batch_name, verbosity=verbosity-1)
+        self.batch = batch.Helper(group_name, batch_name, verbosity=verbosity-1)
         self.input_prep = InputPrepper(group_name, batch_name, verbosity=verbosity-1)
         return
     
