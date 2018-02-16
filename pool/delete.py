@@ -1,5 +1,5 @@
 from ..status import StatusReporter
-from ..az.batch import BatchHelper
+from ..az import batch
 
 class PoolDeleter(StatusReporter):
     # This MUST match the VHD's OS
@@ -9,9 +9,9 @@ class PoolDeleter(StatusReporter):
         self.verbosity = verbosity
                 
     def __call__(self, group_name, batch_name, pool_name):
-        batch = BatchHelper(group_name, batch_name, verbosity=self.verbosity-1)
+        bh = batch.Helper(group_name, batch_name, verbosity=self.verbosity-1)
         self.info("Starting delete of pool", pool_name)
-        batch.client.pool.delete(pool_name)
+        bh.client.pool.delete(pool_name)
     
     pass
 

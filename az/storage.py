@@ -1,4 +1,5 @@
 import time, datetime
+import os.path
 
 from azure.mgmt.storage.models import StorageAccountCreateParameters, Sku, Kind
 from azure.storage import blob
