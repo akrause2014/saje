@@ -6,6 +6,7 @@ import time
 
 from ..az import batch
 from ..status import StatusReporter
+from ..common.cd import cd
 
 class SubmittedJob(StatusReporter):
     def __init__(self, group_name, batch_name, job_id, verbosity=1):
@@ -31,15 +32,19 @@ class SubmittedJob(StatusReporter):
 
     def fetch_output(self, output_path):
         assert self.get_state() ==  batch.models.JobState.completed
+        
+        output_path = os.path.abspath(output_path)
+        if not os.path.exists(output_path):
+            os.makedirs(output_path)
 
         blob_service = self.batch.storage.block_blob_service
         out_cont = blob_service.get_container(self.job_id)
-        for blb in out_cont.list():
-            # Make any necessary containing directories
-            out_fn = os.path.join(output_path, blb)
-            out_dir = os.path.dirname(out_fn)
-            if out_dir != '':
-                os.makedirs(out_dir)
-            out_cont.download(blb, out_fn)
+        with cd(output_path):
+            for blb in out_cont.list():
+                # Make any necessary containing directories
+                out_dir = os.path.dirname(blb)
+                if out_dir != '' and not os.path.exists(out_dir):
+                    os.makedirs(out_dir)
+                out_cont.download(blb, blb)
         return
     pass
