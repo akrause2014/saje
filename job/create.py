@@ -97,7 +97,8 @@ class JobCreator(StatusReporter):
         job_param = batch.models.JobAddParameter(id=job_id, pool_info=pool_info,
                                                  display_name=job.name,
                                                  job_preparation_task=job_prep_task,
-                                                 job_release_task=job_rel_task)
+                                                 job_release_task=job_rel_task,
+                                                 uses_task_dependencies=True)
         self.batch.client.job.add(job_param)
         task_param = batch.models.TaskAddParameter(id=self.task_id,
                                                    resource_files=[run_resource],
@@ -106,8 +107,8 @@ class JobCreator(StatusReporter):
                                                    user_identity=sudoer)
         self.batch.client.task.add(job_id, task_param)
 
-        if cleanup_task is not None:
-            cleanup_param = batch.models.TaskAddParameter(id=self.task_id+'_cleanup',
+        if cleanup_command is not None:
+            cleanup_param = batch.models.TaskAddParameter(id='{task_id}_cleanup'.format(task_id=self.task_id),
                                                           command_line=cleanup_command,
                                                           depends_on=batch.models.TaskDependencies(task_ids=[self.task_id]))
             self.batch.client.task.add(job_id, cleanup_param)
