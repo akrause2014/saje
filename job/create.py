@@ -20,7 +20,7 @@ class JobCreator(StatusReporter):
     def __init__(self, group_name, batch_name, verbosity=1):
         self.verbosity = verbosity
         self.batch = batch.Helper(group_name, batch_name, verbosity=verbosity-1)
-        self.input_prep = InputPrepper(group_name, batch_name, verbosity=verbosity-1)
+        self.input_prep = InputPrepper(self.batch.storage.block_blob_service, verbosity=verbosity-1)
         return
 
     def __call__(self, pool_name, requested_nodes, job_id, job_spec, input_command_str, cleanup_command=None):

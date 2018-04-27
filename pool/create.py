@@ -90,7 +90,7 @@ class PoolCreator(StatusReporter):
             node_agent_sku_id=self.AGENT_SKU_ID
             )
         
-    def __call__(self, pool_name, n_nodes, create_user=False):
+    def __call__(self, pool_name, n_nodes, create_user=False, start_task=None):
         users = []
         user_params = {}
         if create_user:
@@ -115,7 +115,8 @@ class PoolCreator(StatusReporter):
             enable_auto_scale=False,
             enable_inter_node_communication=True,
             max_tasks_per_node=1,
-            user_accounts=users)
+            user_accounts=users,
+            start_task=start_task)
         self.info('Creating pool', pool_name)
         self.batch.client.pool.add(pool_conf)
         return PoolStartWaiter(self.batch.client, pool_name, user_params)

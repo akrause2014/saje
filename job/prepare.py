@@ -9,10 +9,9 @@ from ..status import StatusReporter
 from ..az import batch
 
 class InputPrepper(StatusReporter):
-    def __init__(self, group_name, batch_name, verbosity=1):
+    def __init__(self, blob_service, verbosity=1):
         self.verbosity = verbosity
-        self.batch = batch.Helper(group_name, batch_name, verbosity=verbosity-1)
-        self.blob_service = self.batch.storage.block_blob_service
+        self.blob_service = blob_service
         return
     
     @staticmethod
