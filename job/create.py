@@ -23,7 +23,7 @@ class JobCreator(StatusReporter):
         self.input_prep = InputPrepper(group_name, batch_name, verbosity=verbosity-1)
         return
 
-    def __call__(self, pool_name, requested_nodes, job_id, job_spec, input_command_str):
+    def __call__(self, pool_name, requested_nodes, job_id, job_spec, input_command_str, cleanup_command=None):
 
         job = JobSpec.FromJson(job_spec)
         self.info('Job ID:', job_id)
@@ -105,6 +105,12 @@ class JobCreator(StatusReporter):
                                                    multi_instance_settings=mpi,
                                                    user_identity=sudoer)
         self.batch.client.task.add(job_id, task_param)
+
+        if cleanup_task is not None:
+            cleanup_param = batch.models.TaskAddParameter(id=self.task_id+'_cleanup',
+                                                          command_line=cleanup_command,
+                                                          depends_on=batch.models.TaskDependencies(task_ids=[self.task_id]))
+            self.batch.client.task.add(job_id, cleanup_param)
 
         # Set the job to finish once the task is done
         self.batch.client.job.patch(job_id, batch.models.JobPatchParameter(on_all_tasks_complete='terminateJob'))
